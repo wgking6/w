@@ -154,9 +154,11 @@
         if (isGAS) {
           google.script.run.logUserAccess(user);
         } else {
-          // Send Beacon or async fetch
+          // Send Beacon or async fetch with text/plain to avoid CORS options
           fetch(GAS_API_URL, {
             method: 'POST',
+            mode: 'no-cors', // Beacon style, we don't need response
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'logUserAccess', data: user })
           }).catch(console.error);
         }
@@ -177,8 +179,15 @@
                .withFailureHandler((err) => reject(new Error(err.message || err)))
                .processCartOrder(user, paymentNote, itemsForBackend);
            } else {
+             // 關鍵修正：
+             // 1. 使用 headers: { "Content-Type": "text/plain;charset=utf-8" } 避免瀏覽器發送 OPTIONS 預檢請求
+             // 2. body 使用 JSON.stringify，後端會解析它
              fetch(GAS_API_URL, {
                 method: 'POST',
+                redirect: 'follow',
+                headers: {
+                  "Content-Type": "text/plain;charset=utf-8"
+                },
                 body: JSON.stringify({ 
                    action: 'processCartOrder', 
                    user: user, 
@@ -191,7 +200,10 @@
                 if (data.success) resolve(data);
                 else reject(new Error(data.message || 'Order failed'));
              })
-             .catch(err => reject(err));
+             .catch(err => {
+                console.error("Fetch Error:", err);
+                reject(new Error("無法連接到伺服器，請稍後再試"));
+             });
            }
         });
       };
@@ -206,6 +218,10 @@
           } else {
              fetch(GAS_API_URL, {
                 method: 'POST',
+                redirect: 'follow',
+                headers: {
+                  "Content-Type": "text/plain;charset=utf-8"
+                },
                 body: JSON.stringify({ action: 'submitIssue', data: data })
              })
              .then(res => res.json())

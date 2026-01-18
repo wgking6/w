@@ -105,9 +105,21 @@ function handleApiGet(e) {
 function handleApiPost(e) {
   let data;
   try {
-    data = JSON.parse(e.postData.contents);
+    // 優先解析 contents，如果是透過 text/plain 送來的
+    if (e.postData && e.postData.contents) {
+       data = JSON.parse(e.postData.contents);
+    } else if (e.parameter) {
+       // 如果是 x-www-form-urlencoded，嘗試從參數讀取
+       // 這裡假設如果沒有 contents，資料可能在 parameter 裡 (少見但防呆)
+       data = e.parameter;
+    }
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON' }))
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON: ' + err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (!data || !data.action) {
+     return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'No action specified' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
