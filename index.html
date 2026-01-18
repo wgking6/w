@@ -147,6 +147,42 @@
         });
       };
 
+      const getMemberProfileBackend = (userId) => {
+         return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .getMemberProfile(userId);
+           } else {
+             fetch(`${GAS_API_URL}?action=getMemberProfile&userId=${userId}`)
+               .then(res => res.json())
+               .then(resolve).catch(reject);
+           }
+         });
+      };
+
+      const updateMemberProfileBackend = (data) => {
+         return new Promise((resolve, reject) => {
+            if (isGAS) {
+               google.script.run
+                 .withSuccessHandler(resolve)
+                 .withFailureHandler((err) => reject(new Error(err.message || err)))
+                 .updateMemberProfile(data);
+            } else {
+               fetch(GAS_API_URL, {
+                 method: 'POST',
+                 redirect: 'follow',
+                 headers: { "Content-Type": "text/plain;charset=utf-8" },
+                 body: JSON.stringify({ action: 'updateMemberProfile', ...data })
+               })
+               .then(res => res.json())
+               .then(data => { if(data.success) resolve(data); else reject(new Error(data.message)); })
+               .catch(reject);
+            }
+         });
+      };
+
       const logUserToBackend = (user) => {
         if (isGAS) {
           google.script.run.logUserAccess(user);
@@ -231,6 +267,34 @@
         });
       };
 
+      const cancelOrderBackend = (userId, orderId) => {
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .cancelOrder(userId, orderId);
+           } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                   action: 'cancelOrder', 
+                   userId: userId, 
+                   orderId: orderId
+                })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Cancel failed'));
+             })
+             .catch(reject);
+           }
+        });
+      };
+
       const submitIssueReport = (data) => {
         return new Promise((resolve, reject) => {
           if (isGAS) {
@@ -284,7 +348,7 @@
       // Components
       // ==========================================
 
-      const Navbar = ({ user, cartCount, onReport, onWallet, onOpenCart, onLogin }) => {
+      const Navbar = ({ user, cartCount, onReport, onSuggest, onWallet, onProfile, onOpenCart, onLogin }) => {
         const isGuest = !user || user.userId === 'test-user';
         return (
           <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50">
@@ -297,7 +361,7 @@
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 1.9.5</span>
+                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.1</span>
                   </div>
                   <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
                 </div>
@@ -314,11 +378,14 @@
                      <span className="text-lg">🎫</span><span className="hidden sm:inline">票券</span>
                    </button>
                 )}
-                <button onClick={onReport} className="hidden sm:block px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">回報</button>
+                <div className="hidden sm:flex items-center gap-2">
+                  <button onClick={onReport} className="px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">回報</button>
+                  <button onClick={onSuggest} className="px-3 py-1 text-xs border border-blue-500/50 text-blue-400 hover:bg-blue-600 hover:text-white transition rounded">功能建議</button>
+                </div>
                 {!isGuest ? (
-                  <div className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card">
+                  <button onClick={onProfile} className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card hover:brightness-110 transition">
                     <img src={user.pictureUrl || 'https://picsum.photos/100/100'} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-wuxia-gold/70 shadow-md" />
-                  </div>
+                  </button>
                 ) : (
                    <button onClick={onLogin} className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]">
                      <span className="font-bold">LINE 登入</span>
@@ -331,12 +398,19 @@
       };
 
       const ProductCard = ({ product, onAdd }) => {
-        const isMobile = (product.category || '').trim() === '手機遊戲';
+        const category = (product.category || '').trim();
+        const isMobile = category === '手機遊戲';
+        const isWeb = category === '網頁遊戲';
+        
+        let tagClass = 'bg-blue-900/80 border-blue-500 text-blue-100'; // PC default
+        if (isMobile) tagClass = 'bg-purple-900/80 border-purple-500 text-purple-100';
+        if (isWeb) tagClass = 'bg-green-900/80 border-green-500 text-green-100';
+
         return (
           <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
             <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
               <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
-              <div className={`absolute top-2 right-2 backdrop-blur-md px-3 py-0.5 rounded text-xs font-bold border shadow-lg tracking-widest ${isMobile ? 'bg-purple-900/80 border-purple-500 text-purple-100' : 'bg-blue-900/80 border-blue-500 text-blue-100'}`}>{product.category}</div>
+              <div className={`absolute top-2 right-2 backdrop-blur-md px-3 py-0.5 rounded text-xs font-bold border shadow-lg tracking-widest ${tagClass}`}>{product.category}</div>
             </div>
             <div className="p-5 flex flex-col flex-grow relative">
               <h3 className="text-lg font-bold text-wuxia-gold mb-2 leading-tight group-hover:text-white transition-colors">{product.name}</h3>
@@ -367,6 +441,113 @@
               <div className="p-6 bg-pattern-cloud overflow-y-auto custom-scrollbar">{children}</div>
             </div>
           </div>
+        );
+      };
+
+      const ProfileModal = ({ isOpen, user, onClose }) => {
+         const [loading, setLoading] = React.useState(false);
+         const [formData, setFormData] = React.useState({ phone: '', email: '', gender: '' });
+
+         React.useEffect(() => {
+           if(isOpen && user) {
+             setLoading(true);
+             getMemberProfileBackend(user.userId)
+               .then(data => { if(data.success) setFormData({ phone: data.phone, email: data.email, gender: data.gender || '不透露' }); })
+               .finally(() => setLoading(false));
+           }
+         }, [isOpen, user]);
+
+         const handleSave = () => {
+            setLoading(true);
+            updateMemberProfileBackend({ 
+               userId: user.userId, 
+               displayName: user.displayName, 
+               phone: formData.phone, 
+               email: formData.email, 
+               gender: formData.gender 
+            }).then(() => {
+               Swal.fire({ toast:true, position:'top-end', icon:'success', title:'資料已更新', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
+               onClose();
+            }).catch(e => Swal.fire('Error', e.message, 'error'))
+              .finally(() => setLoading(false));
+         };
+
+         return (
+            <Modal isOpen={isOpen} title="會員資料卡" onClose={onClose}>
+               <div className="flex flex-col items-center mb-6">
+                  <img src={user?.pictureUrl || 'https://placehold.co/100'} className="w-20 h-20 rounded-full border-2 border-wuxia-gold shadow-lg mb-2" />
+                  <h3 className="text-lg font-bold text-white">{user?.displayName}</h3>
+                  <p className="text-xs text-stone-500">{user?.userId}</p>
+               </div>
+               {loading ? <div className="text-center py-4 text-wuxia-gold animate-pulse">讀取中...</div> : (
+                  <div className="space-y-4">
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">聯絡電話</label>
+                        <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" placeholder="09xx-xxx-xxx" />
+                     </div>
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">電子信箱</label>
+                        <input type="email" value={formData.email} onChange={e => setFormData({...formData, email:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" placeholder="example@gmail.com" />
+                     </div>
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">性別</label>
+                        <select value={formData.gender} onChange={e => setFormData({...formData, gender:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white">
+                           <option value="男">男</option>
+                           <option value="女">女</option>
+                           <option value="不透露">不透露</option>
+                        </select>
+                     </div>
+                     <button onClick={handleSave} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold mt-4 shadow-lg">儲存變更</button>
+                  </div>
+               )}
+            </Modal>
+         );
+      };
+      
+      const GuideModal = ({ isOpen, onClose }) => {
+        const [dontShow, setDontShow] = React.useState(false);
+        
+        const handleClose = () => {
+            if (dontShow) {
+                try { localStorage.setItem('game_equation_hide_guide_v2', 'true'); } catch(e){}
+            }
+            onClose();
+        };
+
+        if (!isOpen) return null;
+        return (
+           <Modal isOpen={isOpen} title="📜 新手入門指引" onClose={handleClose}>
+             <div className="space-y-6">
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">1</div>
+                   <div><h4 className="text-wuxia-gold font-bold">挑選寶物</h4><p className="text-stone-400 text-sm">瀏覽商品列表，選擇您需要的遊戲輔助或虛寶，點擊「加入行囊」。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">2</div>
+                   <div><h4 className="text-wuxia-gold font-bold">確認行囊</h4><p className="text-stone-400 text-sm">點擊右上角購物車圖示，確認數量無誤後，點擊「提交訂單」。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">3</div>
+                   <div><h4 className="text-wuxia-gold font-bold">傳送通知</h4><p className="text-stone-400 text-sm">系統會自動引導您開啟 LINE，請送出預設訊息以建立訂單紀錄。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">4</div>
+                   <div><h4 className="text-wuxia-gold font-bold">付款回報</h4><p className="text-stone-400 text-sm">畫面將顯示匯款帳號。轉帳後，請務必輸入您的「帳號後五碼」並送出。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">5</div>
+                   <div><h4 className="text-wuxia-gold font-bold">自動發貨</h4><p className="text-stone-400 text-sm">系統確認入帳後(約5分鐘)，請至「票券夾」領取您的卡號與密碼。</p></div>
+                </div>
+                
+                <div className="pt-2">
+                    <div className="flex items-center gap-2 mb-3 justify-center">
+                        <input type="checkbox" id="no-guide" checked={dontShow} onChange={e => setDontShow(e.target.checked)} className="w-4 h-4 accent-wuxia-red cursor-pointer" />
+                        <label htmlFor="no-guide" className="text-stone-400 text-sm cursor-pointer select-none">下次不再顯示此訊息</label>
+                    </div>
+                    <button onClick={handleClose} className="w-full py-3 bg-gradient-to-r from-wuxia-gold-dark to-wuxia-gold text-black font-bold rounded shadow-lg hover:brightness-110 transition">我已瞭解，開始冒險！</button>
+                </div>
+             </div>
+           </Modal>
         );
       };
 
@@ -506,7 +687,7 @@
         );
       };
 
-      const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin }) => {
+      const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin, onCancelOrder, onReportPayment }) => {
          const [orders, setOrders] = React.useState([]);
          const [loading, setLoading] = React.useState(false);
          const isAdmin = user && user.userId === ADMIN_ID;
@@ -556,18 +737,25 @@
                                 <h4 className="text-white font-bold">{order.productName}</h4>
                                 <div className="flex gap-2 items-center mt-1">
                                   <p className="text-xs text-stone-500">{new Date(order.date).toLocaleString()}</p>
-                                  {!order.codes && <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded animate-pulse">待發貨</span>}
-                                  {order.codes && <span className="text-[10px] bg-green-900/50 text-green-500 border border-green-700 px-1 rounded">已完成</span>}
+                                  {order.status === '待處理' && <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded animate-pulse">待處理</span>}
+                                  {order.status === '已發貨' && <span className="text-[10px] bg-green-900/50 text-green-500 border border-green-700 px-1 rounded">已完成</span>}
+                                  {order.status === '已取消' && <span className="text-[10px] bg-stone-700 text-stone-400 border border-stone-600 px-1 rounded">已取消</span>}
                                 </div>
                               </div>
                               <div className="text-right"><span className="text-wuxia-gold font-mono block">${order.price}</span><span className="text-[10px] text-stone-400">x{order.quantity}</span></div>
                            </div>
-                           {(!order.codes || order.codes === '') ? (
+                           {/* Content area based on status */}
+                           {order.status === '待處理' && (
                               <div className="text-center py-4 bg-stone-800/30 rounded border border-dashed border-stone-700 mt-2">
-                                <p className="text-wuxia-gold text-sm font-bold">客服確認中，請稍候</p>
-                                <p className="text-xs text-stone-500 mt-1">款項核對無誤後，系統將自動派發序號</p>
+                                <p className="text-wuxia-gold text-sm font-bold">等待入帳確認中</p>
+                                <p className="text-xs text-stone-500 mt-1 mb-3">若已匯款請點擊回報，系統核對後自動發卡</p>
+                                <div className="flex justify-center gap-2">
+                                    <button onClick={() => onReportPayment(order.orderId, order.price)} className="px-3 py-1 bg-wuxia-gold text-black text-xs font-bold rounded hover:bg-white transition">匯款回報</button>
+                                    <button onClick={() => onCancelOrder(order.orderId)} className="px-3 py-1 border border-stone-600 text-stone-400 text-xs rounded hover:bg-stone-800 transition">取消訂單</button>
+                                </div>
                               </div>
-                           ) : (
+                           )}
+                           {order.status === '已發貨' && (
                               <div className="space-y-2 mt-2">
                                  <div className="bg-[#1a0f0f] p-2 rounded border border-wuxia-jade/20 relative group/code">
                                    <div className="flex justify-between"><p className="text-[10px] text-stone-500 uppercase">序號 / Codes</p><button onClick={() => { navigator.clipboard.writeText(order.codes); Swal.fire({toast:true, position:'top-end', icon:'success', title:'複製成功', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff'}); }} className="text-[10px] text-wuxia-jade underline">複製</button></div>
@@ -581,6 +769,9 @@
                                  )}
                               </div>
                            )}
+                           {order.status === '已取消' && (
+                               <div className="text-center py-2"><p className="text-xs text-stone-600">此訂單已取消</p></div>
+                           )}
                         </div>
                      ))}
                   </div>
@@ -589,25 +780,45 @@
          );
       };
 
-      const ReportModal = ({ isOpen, user, onClose, onLogin }) => {
-        const [type, setType] = React.useState('充值問題');
+      const ReportModal = ({ isOpen, user, onClose, onLogin, initialType, products }) => {
+        const [type, setType] = React.useState(initialType || '充值問題');
         const [desc, setDesc] = React.useState('');
+        const [relatedProduct, setRelatedProduct] = React.useState(''); // New State
         const [status, setStatus] = React.useState('idle');
+
+        React.useEffect(() => {
+           if(isOpen && initialType) setType(initialType);
+        }, [isOpen, initialType]);
+
         const handleSubmit = async () => {
           if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', confirmButtonText: '登入', preConfirm: onLogin });
           if (!desc.trim()) return Swal.fire({ icon: 'warning', title: '請填寫描述', confirmButtonText: '好' });
           setStatus('submitting');
           try {
-            await submitIssueReport({ userId: user.userId, displayName: user.displayName, type, description: desc });
+            await submitIssueReport({ 
+               userId: user.userId, 
+               displayName: user.displayName, 
+               type, 
+               description: desc,
+               productName: relatedProduct // Pass product name
+            });
             setStatus('success');
-            setTimeout(() => { onClose(); setStatus('idle'); setDesc(''); }, 2000);
+            setTimeout(() => { onClose(); setStatus('idle'); setDesc(''); setRelatedProduct(''); }, 2000);
           } catch(e) { Swal.fire({ icon: 'error', title: '發送失敗' }); setStatus('idle'); }
         };
         if (status === 'success') return <Modal isOpen={isOpen} title="回報成功" onClose={onClose}><div className="text-center py-8"><div className="text-wuxia-jade text-5xl mb-4">✓</div><p className="text-stone-300">您的飛鴿傳書已送達！</p></div></Modal>;
         return (
-          <Modal isOpen={isOpen} title="問題回報" onClose={onClose}>
+          <Modal isOpen={isOpen} title="問題回報 / 功能建議" onClose={onClose}>
             <div className="space-y-4">
-              <div><label className="block text-xs text-wuxia-gold mb-1">問題類型</label><select value={type} onChange={e => setType(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none"><option value="充值問題">充值問題</option><option value="序號無效">序號無效</option><option value="商品建議">商品建議</option><option value="其他">其他</option></select></div>
+              <div><label className="block text-xs text-wuxia-gold mb-1">問題類型</label><select value={type} onChange={e => setType(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none"><option value="充值問題">充值問題</option><option value="序號無效">序號無效</option><option value="商品建議">商品建議</option><option value="功能建議">功能建議</option><option value="其他">其他</option></select></div>
+              <div>
+                  <label className="block text-xs text-wuxia-gold mb-1">相關商品 (輔助名稱)</label>
+                  <select value={relatedProduct} onChange={e => setRelatedProduct(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none">
+                     <option value="">-- 請選擇 (若無可不選) --</option>
+                     {products && products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                     <option value="General">一般/系統問題</option>
+                  </select>
+              </div>
               <div><label className="block text-xs text-wuxia-gold mb-1">詳細描述</label><textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none"></textarea></div>
               <div className="pt-2"><button onClick={handleSubmit} disabled={status === 'submitting'} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold transition disabled:opacity-50">{status === 'submitting' ? '發送中...' : '提交回報'}</button></div>
             </div>
@@ -634,10 +845,14 @@
         const [showBankInfo, setShowBankInfo] = React.useState(false); 
         const [paymentNote, setPaymentNote] = React.useState(''); 
         const [currentOrderId, setCurrentOrderId] = React.useState(null); 
+        const [currentOrderPrice, setCurrentOrderPrice] = React.useState(0);
         
         const [showReport, setShowReport] = React.useState(false);
+        const [reportInitType, setReportInitType] = React.useState('充值問題');
         const [showWallet, setShowWallet] = React.useState(false);
-        const [showAdmin, setShowAdmin] = React.useState(false); // Admin State
+        const [showAdmin, setShowAdmin] = React.useState(false); 
+        const [showGuide, setShowGuide] = React.useState(false); 
+        const [showProfile, setShowProfile] = React.useState(false); // ★ Profile Modal State
 
         const [isProcessing, setIsProcessing] = React.useState(false);
         const [activeCategory, setActiveCategory] = React.useState('全部');
@@ -660,6 +875,9 @@
              } else {
                 setUser({ userId: 'test-user', displayName: '訪客', pictureUrl: '', os: 'web' });
              }
+             // ★ Check LocalStorage for guide preference
+             const hasSeenGuide = localStorage.getItem('game_equation_hide_guide_v2');
+             if (!hasSeenGuide) setShowGuide(true);
           } catch (err) {
             console.error('LIFF Error:', err);
             setUser({ userId: 'test-user', displayName: '離線測試員', pictureUrl: '', os: 'web' });
@@ -682,7 +900,7 @@
           return products.filter(p => (p.category || '').trim() === activeCategory);
         }, [products, activeCategory]);
 
-        const categories = ['全部', '電腦遊戲', '手機遊戲'];
+        const categories = ['全部', '電腦遊戲', '手機遊戲', '網頁遊戲']; // ★ Added Web Game
 
         const openAddToCart = (product) => { setTempProduct(product); setTempQty(1); };
         const confirmAddToCart = () => {
@@ -719,7 +937,11 @@
                    }]);
                  } catch (msgErr) { console.error("Line Msg Error:", msgErr); }
                }
-               setCart([]); setCurrentOrderId(result.orderId); setShowCart(false); setShowBankInfo(true);
+               setCart([]); 
+               setCurrentOrderId(result.orderId); 
+               setCurrentOrderPrice(cartTotal); // Set price for bank modal
+               setShowCart(false); 
+               setShowBankInfo(true);
              } else {
                Swal.fire({ icon: 'error', title: '訂單建立失敗', text: result.message });
              }
@@ -749,10 +971,43 @@
         const copyToClipboard = (text) => {
              if (navigator.clipboard) { navigator.clipboard.writeText(text); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '已複製', timer: 1500, showConfirmButton:false, background:'#2b1212', color:'#fff' }); }
         };
+        
+        const handleWalletReportPayment = (orderId, price) => {
+           setCurrentOrderId(orderId);
+           setCurrentOrderPrice(price);
+           setShowWallet(false);
+           setShowBankInfo(true);
+        };
+
+        const handleWalletCancelOrder = async (orderId) => {
+           const r = await Swal.fire({
+              title: '取消訂單？', text: '確定要取消這筆尚未付款的訂單嗎？', icon: 'warning', showCancelButton: true, confirmButtonText: '確定取消', cancelButtonText: '保留', background: '#2b1212', color: '#fff'
+           });
+           if(r.isConfirmed) {
+              try {
+                 const result = await cancelOrderBackend(user.userId, orderId);
+                 if(result.success) {
+                    Swal.fire({icon:'success', title:'已取消', timer:1500, showConfirmButton:false});
+                    setShowWallet(false); // Close to force refresh next open, or could reload
+                 } else {
+                    Swal.fire({icon:'error', title:'取消失敗', text:result.message});
+                 }
+              } catch(e) { Swal.fire({icon:'error', title:'錯誤', text:e.message}); }
+           }
+        };
 
         return (
           <div className="min-h-screen pb-20">
-            <Navbar user={user} cartCount={cart.reduce((a,b)=>a+b.quantity, 0)} onReport={() => setShowReport(true)} onWallet={() => { if(!user || user.userId === 'test-user') return Swal.fire({icon:'info', title:'請先登入', showCancelButton:true, confirmButtonText:'LINE 登入', cancelButtonText:'取消'}).then(r => { if(r.isConfirmed) loginWithLiffUrl(); }); setShowWallet(true); }} onOpenCart={() => setShowCart(true)} onLogin={loginWithLiffUrl} />
+            <Navbar 
+                user={user} 
+                cartCount={cart.reduce((a,b)=>a+b.quantity, 0)} 
+                onReport={() => { setReportInitType('充值問題'); setShowReport(true); }} 
+                onSuggest={() => { setReportInitType('功能建議'); setShowReport(true); }}
+                onWallet={() => { if(!user || user.userId === 'test-user') return Swal.fire({icon:'info', title:'請先登入', showCancelButton:true, confirmButtonText:'LINE 登入', cancelButtonText:'取消'}).then(r => { if(r.isConfirmed) loginWithLiffUrl(); }); setShowWallet(true); }} 
+                onProfile={() => setShowProfile(true)} // ★ Profile Handler
+                onOpenCart={() => setShowCart(true)} 
+                onLogin={loginWithLiffUrl} 
+            />
 
             <main className="container mx-auto px-4 pt-24">
               <div className="mb-12 text-center relative">
@@ -760,7 +1015,11 @@
                 <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight"><span className="text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-100 to-wuxia-gold drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">遊戲方程式</span>
                 <p className="text-sm text-wuxia-gold/80 mb-1 font-serif tracking-widest mt-2">釋放你的雙手</p>
                 <span className="block text-xl mt-1 font-normal text-red-300 font-serif tracking-widest">虛寶補給自動發貨站</span></h1>
-                <div className="sm:hidden mt-4 flex justify-center gap-4">{user && user.userId !== 'test-user' && <button onClick={() => setShowWallet(true)} className="text-xs text-wuxia-gold underline">我的票券夾</button>}<button onClick={() => setShowReport(true)} className="text-xs text-wuxia-red underline">遇到問題？</button></div>
+                <div className="sm:hidden mt-4 flex justify-center gap-4">
+                    {user && user.userId !== 'test-user' && <button onClick={() => setShowWallet(true)} className="text-xs text-wuxia-gold underline">我的票券夾</button>}
+                    <button onClick={() => { setReportInitType('充值問題'); setShowReport(true); }} className="text-xs text-wuxia-red underline">遇到問題？</button>
+                    <button onClick={() => { setReportInitType('功能建議'); setShowReport(true); }} className="text-xs text-blue-400 underline">功能建議</button>
+                </div>
               </div>
 
               <div className="flex justify-center mb-10 gap-4">
@@ -828,7 +1087,7 @@
                         <p className="text-wuxia-gold text-xs font-bold">訂單已成立，請儘速付款</p>
                         <p className="text-stone-400 text-[10px] mt-1">單號：{currentOrderId}</p>
                     </div>
-                    <p className="text-stone-300 text-sm text-center">請匯款 <span className="text-wuxia-gold font-bold">${cartTotal}</span> 至以下帳戶：</p>
+                    <p className="text-stone-300 text-sm text-center">請匯款 <span className="text-wuxia-gold font-bold">${cartTotal || currentOrderPrice}</span> 至以下帳戶：</p>
                     <div className="bg-gradient-to-br from-stone-900 to-black p-5 rounded-lg border border-wuxia-gold/50 relative overflow-hidden shadow-inner">
                         <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl text-white font-serif italic font-bold select-none">Bank</div>
                         <div className="relative z-10 space-y-3">
@@ -850,9 +1109,30 @@
                   </div>
             </Modal>
 
-            <ReportModal isOpen={showReport} user={user} onClose={() => setShowReport(false)} onLogin={loginWithLiffUrl} />
-            <WalletModal isOpen={showWallet} user={user} onClose={() => setShowWallet(false)} onLogin={loginWithLiffUrl} onOpenAdmin={() => { setShowWallet(false); setShowAdmin(true); }} />
+            <ReportModal 
+                isOpen={showReport} 
+                user={user} 
+                onClose={() => setShowReport(false)} 
+                onLogin={loginWithLiffUrl} 
+                initialType={reportInitType} 
+                products={products} // ★ Pass Products
+            />
+            <WalletModal 
+                isOpen={showWallet} 
+                user={user} 
+                onClose={() => setShowWallet(false)} 
+                onLogin={loginWithLiffUrl} 
+                onOpenAdmin={() => { setShowWallet(false); setShowAdmin(true); }}
+                onCancelOrder={handleWalletCancelOrder}
+                onReportPayment={handleWalletReportPayment}
+            />
+            <ProfileModal 
+                isOpen={showProfile} 
+                user={user} 
+                onClose={() => setShowProfile(false)} 
+            />
             {showAdmin && <AdminModal isOpen={showAdmin} onClose={() => setShowAdmin(false)} />}
+            {showGuide && <GuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />}
           </div>
         );
       };
