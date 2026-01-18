@@ -150,7 +150,6 @@
         if (isGAS) {
           google.script.run.logUserAccess(user);
         } else {
-          // logUserAccess 使用 no-cors，只求送出不求回應，所以通常比較容易成功
           fetch(GAS_API_URL, {
             method: 'POST',
             mode: 'no-cors', 
@@ -175,13 +174,10 @@
                .withFailureHandler((err) => reject(new Error(err.message || err)))
                .processCartOrder(user, paymentNote, itemsForBackend);
            } else {
-             // 關鍵修正：確保能讀取錯誤訊息
              fetch(GAS_API_URL, {
                 method: 'POST',
-                redirect: 'follow', // 重要：跟隨 GAS 的 302 Redirect
-                headers: {
-                  "Content-Type": "text/plain;charset=utf-8" // 避免 CORS Preflight
-                },
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ 
                    action: 'processCartOrder', 
                    user: user, 
@@ -190,27 +186,46 @@
                 })
              })
              .then(async res => {
-                // 先讀成文字，避免 JSON.parse 炸開
                 const text = await res.text();
-                try {
-                   return JSON.parse(text);
-                } catch (e) {
-                   console.error("Non-JSON response from server:", text);
-                   // 如果回傳的是 HTML，通常代表 GAS 程式端有錯誤
-                   throw new Error("伺服器回應異常 (非 JSON)，可能是部署版本未更新。");
-                }
+                try { return JSON.parse(text); } catch (e) { throw new Error("伺服器回應異常，可能是版本未更新。"); }
              })
              .then(data => {
-                console.log("Server Response:", data);
-                if (data._version) console.log("Backend Version:", data._version);
-                
                 if (data.success) resolve(data);
                 else reject(new Error(data.message || 'Order failed'));
              })
-             .catch(err => {
-                console.error("Fetch Error:", err);
-                reject(err);
-             });
+             .catch(reject);
+           }
+        });
+      };
+
+      const updateOrderPaymentBackend = (userId, orderId, paymentNote) => {
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .updateOrderPayment(userId, orderId, paymentNote);
+           } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                   action: 'updateOrderPayment', 
+                   userId: userId, 
+                   orderId: orderId,
+                   paymentNote: paymentNote
+                })
+             })
+             .then(async res => {
+                const text = await res.text();
+                try { return JSON.parse(text); } catch (e) { throw new Error("伺服器回應異常"); }
+             })
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Update failed'));
+             })
+             .catch(reject);
            }
         });
       };
@@ -226,9 +241,7 @@
              fetch(GAS_API_URL, {
                 method: 'POST',
                 redirect: 'follow',
-                headers: {
-                  "Content-Type": "text/plain;charset=utf-8"
-                },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ action: 'submitIssue', data: data })
              })
              .then(res => res.json())
@@ -236,7 +249,7 @@
                 if (data.success) resolve(data);
                 else reject(new Error(data.message || 'Report failed'));
              })
-             .catch(err => reject(err));
+             .catch(reject);
           }
         });
       };
@@ -246,9 +259,7 @@
       // ==========================================
 
       const Navbar = ({ user, cartCount, onReport, onWallet, onOpenCart, onLogin }) => {
-        // 如果 user 是測試帳號(test-user)，顯示登入按鈕而不是單純顯示"訪客"
         const isGuest = !user || user.userId === 'test-user';
-
         return (
           <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50">
             <div className="container mx-auto px-4 h-20 flex items-center justify-between">
@@ -260,7 +271,7 @@
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 1.0</span>
+                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 1.8</span>
                   </div>
                   <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
                 </div>
@@ -283,10 +294,7 @@
                     <img src={user.pictureUrl || 'https://picsum.photos/100/100'} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-wuxia-gold/70 shadow-md" />
                   </div>
                 ) : (
-                   <button 
-                     onClick={onLogin} 
-                     className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]"
-                   >
+                   <button onClick={onLogin} className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]">
                      <span className="font-bold">LINE 登入</span>
                    </button>
                 )}
@@ -342,21 +350,13 @@
 
          React.useEffect(() => {
             if(isOpen && user) {
-               // 確保是真實用戶才讀取
                if (user.userId === 'test-user') return;
-
                setLoading(true);
                getMyOrders(user.userId)
                   .then(data => { setOrders(data); setLoading(false); })
                   .catch((err) => { 
                      setLoading(false); 
-                     Swal.fire({
-                         icon: 'error', 
-                         title: '無法讀取票券', 
-                         text: '請確認網路狀態或稍後再試 (' + (err.message || 'Unknown') + ')',
-                         background: '#2b1212', 
-                         color: '#fff' 
-                     });
+                     Swal.fire({ icon: 'error', title: '無法讀取票券', text: '請稍後再試 (' + (err.message || 'Unknown') + ')', background: '#2b1212', color: '#fff' });
                   });
             }
          }, [isOpen, user]);
@@ -367,19 +367,14 @@
                  <div className="mb-4 p-2 bg-white/5 rounded border border-white/10 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                        <img src={user.pictureUrl || 'https://placehold.co/100'} className="w-8 h-8 rounded-full border border-stone-600"/>
-                       <div>
-                          <p className="text-xs text-stone-400">目前帳號</p>
-                          <p className="text-sm font-bold text-wuxia-gold">{user.displayName}</p>
-                       </div>
+                       <div><p className="text-xs text-stone-400">目前帳號</p><p className="text-sm font-bold text-wuxia-gold">{user.displayName}</p></div>
                     </div>
-                    <div className="text-right">
-                       <span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">ID: {user.userId ? user.userId.substring(0,6)+'...' : 'Unknown'}</span>
-                    </div>
+                    <div className="text-right"><span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">ID: {user.userId ? user.userId.substring(0,6)+'...' : 'Unknown'}</span></div>
                  </div>
                )}
                {user && user.userId === 'test-user' ? (
                   <div className="text-center py-10">
-                     <p className="text-stone-500 mb-4">您目前處於訪客/離線模式，無法查看票券。</p>
+                     <p className="text-stone-500 mb-4">您目前處於訪客模式，無法查看票券。</p>
                      <button onClick={onLogin} className="px-6 py-2 bg-[#06C755] text-white rounded font-bold hover:bg-[#05b34c] transition shadow-lg">使用 LINE 登入</button>
                   </div>
                ) : loading ? <div className="text-center py-10 text-wuxia-gold animate-pulse">讀取中...</div> : orders.length === 0 ? <div className="text-center py-10 text-stone-500">尚無購買紀錄</div> : (
@@ -400,15 +395,12 @@
                            {(!order.codes || order.codes === '') ? (
                               <div className="text-center py-4 bg-stone-800/30 rounded border border-dashed border-stone-700 mt-2">
                                 <p className="text-wuxia-gold text-sm font-bold">客服確認中，請稍候</p>
-                                <p className="text-xs text-stone-500 mt-1">款項核對無誤後，系統將自動派發序號至此處</p>
+                                <p className="text-xs text-stone-500 mt-1">款項核對無誤後，系統將自動派發序號</p>
                               </div>
                            ) : (
                               <div className="space-y-2 mt-2">
                                  <div className="bg-[#1a0f0f] p-2 rounded border border-wuxia-jade/20 relative group/code">
-                                   <div className="flex justify-between">
-                                      <p className="text-[10px] text-stone-500 uppercase">序號 / Codes</p>
-                                      <button onClick={() => { navigator.clipboard.writeText(order.codes); Swal.fire({toast:true, position:'top-end', icon:'success', title:'複製成功', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff'}); }} className="text-[10px] text-wuxia-jade underline">複製</button>
-                                   </div>
+                                   <div className="flex justify-between"><p className="text-[10px] text-stone-500 uppercase">序號 / Codes</p><button onClick={() => { navigator.clipboard.writeText(order.codes); Swal.fire({toast:true, position:'top-end', icon:'success', title:'複製成功', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff'}); }} className="text-[10px] text-wuxia-jade underline">複製</button></div>
                                    <pre className="text-wuxia-jade font-mono text-sm whitespace-pre-wrap select-all">{order.codes}</pre>
                                  </div>
                                  {order.passwords && order.passwords.trim() !== '' && (
@@ -431,33 +423,22 @@
         const [type, setType] = React.useState('充值問題');
         const [desc, setDesc] = React.useState('');
         const [status, setStatus] = React.useState('idle');
-
         const handleSubmit = async () => {
           if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', confirmButtonText: '登入', preConfirm: onLogin });
-          if (!desc.trim()) return Swal.fire({ icon: 'warning', title: '請填寫描述', text: '我們需要知道您的問題詳情', confirmButtonText: '好' });
+          if (!desc.trim()) return Swal.fire({ icon: 'warning', title: '請填寫描述', confirmButtonText: '好' });
           setStatus('submitting');
           try {
             await submitIssueReport({ userId: user.userId, displayName: user.displayName, type, description: desc });
             setStatus('success');
             setTimeout(() => { onClose(); setStatus('idle'); setDesc(''); }, 2000);
-          } catch(e) {
-            Swal.fire({ icon: 'error', title: '發送失敗', text: '請稍後再試' });
-            setStatus('idle');
-          }
+          } catch(e) { Swal.fire({ icon: 'error', title: '發送失敗' }); setStatus('idle'); }
         };
-
-        if (status === 'success') {
-          return (
-            <Modal isOpen={isOpen} title="回報成功" onClose={onClose}>
-               <div className="text-center py-8"><div className="text-wuxia-jade text-5xl mb-4">✓</div><p className="text-stone-300">您的飛鴿傳書已送達，<br/>小二將盡快為您處理！</p></div>
-            </Modal>
-          );
-        }
+        if (status === 'success') return <Modal isOpen={isOpen} title="回報成功" onClose={onClose}><div className="text-center py-8"><div className="text-wuxia-jade text-5xl mb-4">✓</div><p className="text-stone-300">您的飛鴿傳書已送達！</p></div></Modal>;
         return (
           <Modal isOpen={isOpen} title="問題回報" onClose={onClose}>
             <div className="space-y-4">
-              <div><label className="block text-xs text-wuxia-gold mb-1">問題類型</label><select value={type} onChange={e => setType(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 focus:border-wuxia-gold outline-none"><option value="充值問題">充值問題</option><option value="序號無效">序號無效</option><option value="商品建議">商品建議</option><option value="其他">其他</option></select></div>
-              <div><label className="block text-xs text-wuxia-gold mb-1">詳細描述</label><textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} placeholder="請描述您遇到的狀況..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 focus:border-wuxia-gold outline-none"></textarea></div>
+              <div><label className="block text-xs text-wuxia-gold mb-1">問題類型</label><select value={type} onChange={e => setType(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none"><option value="充值問題">充值問題</option><option value="序號無效">序號無效</option><option value="商品建議">商品建議</option><option value="其他">其他</option></select></div>
+              <div><label className="block text-xs text-wuxia-gold mb-1">詳細描述</label><textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 outline-none"></textarea></div>
               <div className="pt-2"><button onClick={handleSubmit} disabled={status === 'submitting'} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold transition disabled:opacity-50">{status === 'submitting' ? '發送中...' : '提交回報'}</button></div>
             </div>
           </Modal>
@@ -482,6 +463,7 @@
 
         const [showBankInfo, setShowBankInfo] = React.useState(false); 
         const [paymentNote, setPaymentNote] = React.useState(''); 
+        const [currentOrderId, setCurrentOrderId] = React.useState(null); // 用來追蹤剛建立的訂單ID
         
         const [showReport, setShowReport] = React.useState(false);
         const [showWallet, setShowWallet] = React.useState(false);
@@ -492,51 +474,24 @@
            setCartTotal(cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0));
         }, [cart]);
 
-        // 核心修正：強制跳轉到 LIFF URL 進行登入
-        // 使用 window.top.location.href 強制跳出 GAS iframe
-        const loginWithLiffUrl = () => {
-             console.log("Redirecting to LIFF URL for authentication...");
-             window.top.location.href = LIFF_URL;
-        };
+        const loginWithLiffUrl = () => { window.top.location.href = LIFF_URL; };
 
         const initLiff = React.useCallback(async () => {
-          console.log("開始初始化 LIFF...");
           try {
              if (!window.liff) throw new Error("LIFF SDK 未載入");
-
-             // 嘗試初始化
              await window.liff.init({ liffId: LIFF_ID });
-             
-             // 如果是在外部瀏覽器且未登入，且沒有在 iframe 中，嘗試自動登入 (慎用)
-             // 但因為我們是在 GAS iframe 中，所以這裡主要依賴 isLoggIn()
-             
              if (window.liff.isLoggedIn()) {
-                console.log("LIFF 已登入");
                 const profile = await window.liff.getProfile();
-                const userData = { 
-                   userId: profile.userId, 
-                   displayName: profile.displayName, 
-                   pictureUrl: profile.pictureUrl, 
-                   os: window.liff.getOS() 
-                };
+                const userData = { userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl, os: window.liff.getOS() };
                 setUser(userData);
                 logUserToBackend(userData);
              } else {
-                console.log("LIFF 未登入，等待用戶手動點擊登入按鈕...");
-                // 這裡我們不再自動執行 window.liff.login()，因為在 GAS iframe 內容易失敗或無限迴圈。
-                // 相反，我們將使用者保留在「訪客模式」，並讓 UI 顯示「LINE 登入」按鈕。
                 setUser({ userId: 'test-user', displayName: '訪客', pictureUrl: '', os: 'web' });
              }
           } catch (err) {
-            console.error('LIFF 初始化失敗:', err);
-            // 發生錯誤切換到離線測試模式
+            console.error('LIFF Error:', err);
             setUser({ userId: 'test-user', displayName: '離線測試員', pictureUrl: '', os: 'web' });
-            
-            let errorMsg = 'LINE 連線異常 (' + err.message + ')';
-            if (err.message && err.message.includes("channel not found")) {
-                errorMsg = 'LIFF ID 設定錯誤 (Channel Not Found)，請確認 ID 正確。';
-            }
-            setError(errorMsg);
+            setError('LIFF 初始化失敗');
           }
         }, []);
 
@@ -545,153 +500,107 @@
           try {
             const data = await getProducts();
             setProducts(data);
-          } catch (err) {
-            setError('無法讀取商品列表');
-          } finally {
-            setLoading(false);
-          }
+          } catch (err) { setError('無法讀取商品列表'); } finally { setLoading(false); }
         }, []);
 
         React.useEffect(() => { initLiff(); fetchProducts(); }, [initLiff, fetchProducts]);
 
         const filteredProducts = React.useMemo(() => {
           if (activeCategory === '全部') return products;
-          // 關鍵修正：確保篩選時去除空白
           return products.filter(p => (p.category || '').trim() === activeCategory);
         }, [products, activeCategory]);
 
         const categories = ['全部', '電腦遊戲', '手機遊戲'];
 
         const openAddToCart = (product) => { setTempProduct(product); setTempQty(1); };
-
         const confirmAddToCart = () => {
            if (!tempProduct) return;
            setCart(prev => {
               const existing = prev.find(item => item.product.id === tempProduct.id);
-              if (existing) {
-                 return prev.map(item => item.product.id === tempProduct.id ? { ...item, quantity: item.quantity + tempQty } : item);
-              }
+              if (existing) return prev.map(item => item.product.id === tempProduct.id ? { ...item, quantity: item.quantity + tempQty } : item);
               return [...prev, { product: tempProduct, quantity: tempQty }];
            });
            setTempProduct(null);
-           Swal.fire({
-             toast: true,
-             position: 'top-end',
-             icon: 'success',
-             title: '已加入行囊',
-             showConfirmButton: false,
-             timer: 1500,
-             background: '#2b1212',
-             color: '#fff'
-           });
+           Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '已加入行囊', showConfirmButton: false, timer: 1500, background: '#2b1212', color: '#fff' });
         };
-
         const removeFromCart = (productId) => { setCart(prev => prev.filter(item => item.product.id !== productId)); };
-        
         const updateCartQuantity = (productId, delta) => {
-           setCart(prev => prev.map(item => {
-              if (item.product.id === productId) {
-                 const newQty = Math.max(1, item.quantity + delta);
-                 return { ...item, quantity: newQty };
-              }
-              return item;
-           }));
+           setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
         };
 
-        const proceedToCheckout = () => {
+        // 1. 提交訂單 (先建立 Pending 紀錄)
+        const submitOrder = async () => {
            if (cart.length === 0) return;
            if (!user || user.userId === 'test-user') {
-              Swal.fire({ 
-                  icon: 'info', 
-                  title: '請先登入', 
-                  text: '登入 LINE 帳號以進行購買', 
-                  showCancelButton: true,
-                  confirmButtonText: 'LINE 登入',
-                  cancelButtonText: '取消',
-                  confirmButtonColor: '#06C755'
-              }).then((result) => {
-                  if (result.isConfirmed) {
-                      loginWithLiffUrl();
-                  }
-              });
+              Swal.fire({ icon: 'info', title: '請先登入', showCancelButton: true, confirmButtonText: 'LINE 登入' }).then((r) => { if (r.isConfirmed) loginWithLiffUrl(); });
               return;
            }
-           setShowCart(false);
-           setShowBankInfo(true);
-        };
-
-        const executeCartPurchase = async (e) => {
-           if(e) e.preventDefault();
-           if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', text: '無法使用訪客帳號購買', confirmButtonText: '好' });
-           if (!paymentNote.trim()) return Swal.fire({ icon: 'warning', title: '請輸入資料', text: '請輸入轉帳帳號後五碼以供對帳', confirmButtonText: '好' });
-
+           
            setIsProcessing(true);
            try {
-             const result = await withTimeout(
-                processCartOrderBackend({ userId: user.userId, displayName: user.displayName }, paymentNote, cart),
-                30000 
-             );
+             // 傳送空 paymentNote 來建立訂單
+             const result = await withTimeout(processCartOrderBackend({ userId: user.userId, displayName: user.displayName }, "", cart), 30000);
              
              if (result.success) {
+               // 發送 LINE 訊息
                if (window.liff && window.liff.isInClient()) {
                  const itemListStr = cart.map(item => `- ${item.product.name} x${item.quantity}`).join('\n');
                  try {
                    await window.liff.sendMessages([{
                      type: 'text',
-                     text: `【訂單已提交】\n總金額：$${cartTotal}\n帳號後五碼：${paymentNote}\n訂單編號：${result.orderId}\n\n購買明細：\n${itemListStr}\n\n客服人員將盡快核對款項並發貨，請至「我的票券」查看。`
+                     text: `【訂單已成立】\n單號：${result.orderId}\n金額：$${cartTotal}\n\n請依照網頁指示進行付款，完成後您的商品將會自動發送。`
                    }]);
                  } catch (msgErr) { console.error("Line Msg Error:", msgErr); }
                }
 
-               setCart([]); 
-               setShowBankInfo(false);
-               setPaymentNote('');
+               setCart([]); // 清空購物車
+               setCurrentOrderId(result.orderId); // 保存訂單 ID
+               setShowCart(false); // 關閉購物車
+               setShowBankInfo(true); // 打開付款資訊頁
                
-               Swal.fire({
-                 icon: 'success',
-                 title: '訂單已提交',
-                 html: '<p class="text-stone-300">小二已收到您的訂單！<br/>確認款項後將立即為您將寶物放入票券夾。</p>',
-                 confirmButtonText: '好的，我去票券夾看看',
-                 customClass: { popup: 'border-2 border-wuxia-gold' }
-               }).then((result) => {
-                  if (result.isConfirmed) {
-                    setShowWallet(true);
-                  }
-               });
-
              } else {
-               Swal.fire({ icon: 'error', title: '購買失敗', text: result.message, confirmButtonText: '關閉' });
+               Swal.fire({ icon: 'error', title: '訂單建立失敗', text: result.message });
              }
            } catch (err) {
-             console.error("Execution Error:", err);
-             // 如果錯誤訊息包含 "deployment"，給出特別提示
-             const errMsg = err.message || '';
-             if(errMsg.includes("非 JSON")) {
-                 Swal.fire({ icon: 'error', title: '後端版本異常', text: '請確認 Google Apps Script 已部署為「新版本」。', confirmButtonText: '了解' });
+             console.error("Order Error:", err);
+             Swal.fire({ icon: 'error', title: '系統繁忙', text: err.message });
+           } finally {
+             setIsProcessing(false);
+           }
+        };
+
+        // 2. 更新付款資訊 (填寫後五碼)
+        const confirmPaymentInfo = async () => {
+           if (!paymentNote.trim()) return Swal.fire({ icon: 'warning', title: '請輸入後五碼', text: '我們需要這項資訊來對帳' });
+           if (!currentOrderId) return Swal.fire({ icon: 'error', title: '訂單編號遺失', text: '請重新整理頁面' });
+
+           setIsProcessing(true);
+           try {
+             const result = await updateOrderPaymentBackend(user.userId, currentOrderId, paymentNote);
+             
+             if (result.success) {
+                setShowBankInfo(false);
+                setPaymentNote('');
+                setCurrentOrderId(null);
+
+                Swal.fire({
+                 icon: 'success',
+                 title: '付款資訊已更新',
+                 html: '<p class="text-stone-300">系統正在核對您的款項。<br/>核對成功後，商品將自動發送到您的票券夾。</p>',
+                 confirmButtonText: '好的，我去票券夾看看'
+                }).then((r) => { if (r.isConfirmed) setShowWallet(true); });
              } else {
-                 Swal.fire({ icon: 'error', title: '交易發生錯誤', text: errMsg, confirmButtonText: '關閉' });
+                Swal.fire({ icon: 'error', title: '更新失敗', text: result.message });
              }
+           } catch (err) {
+             Swal.fire({ icon: 'error', title: '連線錯誤', text: err.message });
            } finally {
              setIsProcessing(false);
            }
         };
 
         const copyToClipboard = (text) => {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-               Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '帳號已複製', showConfirmButton: false, timer: 1500, background: '#2b1212', color: '#fff' });
-            }).catch(() => {});
-          } else {
-            const textArea = document.createElement("textarea");
-            textArea.value = text;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try { 
-               document.execCommand('copy'); 
-               Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '帳號已複製', showConfirmButton: false, timer: 1500, background: '#2b1212', color: '#fff' });
-            } catch (err) {}
-            document.body.removeChild(textArea);
-          }
+             if (navigator.clipboard) { navigator.clipboard.writeText(text); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '已複製', timer: 1500, showConfirmButton:false, background:'#2b1212', color:'#fff' }); }
         };
 
         return (
@@ -743,41 +652,33 @@
                 )}
             </Modal>
 
-            <Modal isOpen={showCart} title="我的行囊 (購物車)" onClose={() => setShowCart(false)}>
-               {cart.length === 0 ? <div className="text-center py-10 text-stone-500">行囊空空如也，快去選購寶物吧！</div> : (
+            <Modal isOpen={showCart} title="我的行囊" onClose={() => setShowCart(false)}>
+               {cart.length === 0 ? <div className="text-center py-10 text-stone-500">行囊空空如也</div> : (
                   <div className="space-y-4">
                      {cart.map((item, idx) => (
                         <div key={idx} className="bg-black/30 p-3 rounded border border-stone-800 flex flex-col gap-3">
                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3">
-                                 <img src={item.product.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-600"/>
-                                 <div className="flex-1">
-                                    <p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p>
-                                    <p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p>
-                                 </div>
-                              </div>
-                              <button onClick={() => removeFromCart(item.product.id)} className="text-stone-500 hover:text-red-500 p-1">
-                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
+                              <div className="flex items-center gap-3"><img src={item.product.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-600"/><div className="flex-1"><p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p><p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p></div></div>
+                              <button onClick={() => removeFromCart(item.product.id)} className="text-stone-500 hover:text-red-500 p-1"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                            </div>
                            <div className="flex justify-between items-center pl-[60px]">
-                              <div className="flex items-center bg-stone-900 border border-stone-700 rounded h-8">
-                                 <button onClick={() => updateCartQuantity(item.product.id, -1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-l transition">-</button>
-                                 <span className="w-10 text-center text-wuxia-gold font-mono font-bold text-sm border-x border-stone-700">{item.quantity}</span>
-                                 <button onClick={() => updateCartQuantity(item.product.id, 1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-r transition">+</button>
-                              </div>
+                              <div className="flex items-center bg-stone-900 border border-stone-700 rounded h-8"><button onClick={() => updateCartQuantity(item.product.id, -1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-l transition">-</button><span className="w-10 text-center text-wuxia-gold font-mono font-bold text-sm border-x border-stone-700">{item.quantity}</span><button onClick={() => updateCartQuantity(item.product.id, 1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-r transition">+</button></div>
                               <span className="text-wuxia-gold font-mono font-bold text-lg">${item.product.price * item.quantity}</span>
                            </div>
                         </div>
                      ))}
                      <div className="border-t border-white/10 pt-4 mt-4 flex justify-between items-end"><span className="text-stone-400">總金額</span><span className="text-3xl text-wuxia-gold font-mono font-bold">${cartTotal}</span></div>
-                     <button onClick={proceedToCheckout} className="w-full mt-4 py-3 bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white rounded font-bold shadow-lg hover:shadow-wuxia-red/30 transition">前往結帳</button>
+                     <button onClick={submitOrder} disabled={isProcessing} className="w-full mt-4 py-3 bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white rounded font-bold shadow-lg hover:shadow-wuxia-red/30 transition">{isProcessing ? '訂單建立中...' : '提交訂單 (前往付款)'}</button>
                   </div>
                )}
             </Modal>
 
-             <Modal isOpen={showBankInfo} title="結帳資訊" onClose={() => setShowBankInfo(false)}>
+             <Modal isOpen={showBankInfo} title="付款資訊" onClose={() => !isProcessing && setShowBankInfo(false)}>
                   <div className="space-y-6">
+                    <div className="text-center bg-wuxia-gold/10 p-3 rounded border border-wuxia-gold/30">
+                        <p className="text-wuxia-gold text-xs font-bold">訂單已成立，請儘速付款</p>
+                        <p className="text-stone-400 text-[10px] mt-1">單號：{currentOrderId}</p>
+                    </div>
                     <p className="text-stone-300 text-sm text-center">請匯款 <span className="text-wuxia-gold font-bold">${cartTotal}</span> 至以下帳戶：</p>
                     <div className="bg-gradient-to-br from-stone-900 to-black p-5 rounded-lg border border-wuxia-gold/50 relative overflow-hidden shadow-inner">
                         <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl text-white font-serif italic font-bold select-none">Bank</div>
@@ -787,23 +688,16 @@
                             <div className="pt-1"><span className="text-stone-400 text-xs block mb-1">匯款帳號</span><div className="flex items-center justify-between bg-black/50 p-2 rounded border border-wuxia-gold/20"><span className="text-2xl font-mono text-wuxia-gold tracking-widest">{BANK_INFO.account}</span><button onClick={() => copyToClipboard(BANK_INFO.account)} className="ml-2 px-3 py-1 bg-stone-700 hover:bg-wuxia-gold hover:text-black text-xs text-white rounded transition">複製</button></div></div>
                         </div>
                     </div>
-                    <div className="space-y-3 pt-2"><label className="block text-sm text-wuxia-gold font-bold">付款通知</label><input type="text" placeholder="請輸入您的匯款帳號後五碼" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-3 text-white focus:border-wuxia-gold outline-none text-center font-mono tracking-widest text-lg placeholder:text-stone-600 placeholder:text-sm" maxLength={5} /></div>
+                    <div className="space-y-3 pt-2">
+                        <label className="block text-sm text-wuxia-gold font-bold">付款回報</label>
+                        <div className="text-xs text-stone-500 mb-1">請輸入您轉帳帳號的後五碼，以便系統對帳。</div>
+                        <input type="text" placeholder="輸入後五碼" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-3 text-white focus:border-wuxia-gold outline-none text-center font-mono tracking-widest text-lg placeholder:text-stone-600 placeholder:text-sm" maxLength={5} />
+                    </div>
                     <div className="flex gap-4 mt-4">
-                       <button onClick={() => setShowBankInfo(false)} className="px-4 py-3 rounded border border-stone-600 text-stone-400 hover:bg-stone-800 transition text-sm">返回</button>
-                       <button type="button" onClick={executeCartPurchase} disabled={isProcessing} className={`flex-1 px-4 py-3 rounded bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white font-bold transition flex justify-center items-center shadow-lg hover:shadow-wuxia-red/30 border border-wuxia-gold/30 ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}>{isProcessing ? '驗證中...' : '已匯款，提交訂單'}</button>
+                       <button onClick={() => setShowBankInfo(false)} className="px-4 py-3 rounded border border-stone-600 text-stone-400 hover:bg-stone-800 transition text-sm">稍後回報</button>
+                       <button type="button" onClick={confirmPaymentInfo} disabled={isProcessing} className={`flex-1 px-4 py-3 rounded bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white font-bold transition flex justify-center items-center shadow-lg hover:shadow-wuxia-red/30 border border-wuxia-gold/30 ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}>{isProcessing ? '更新中...' : '已匯款，送出資訊'}</button>
                     </div>
-                    {/* 新增回報問題按鈕 */}
-                    <div className="mt-6 border-t border-white/10 pt-4">
-                       <div className="bg-wuxia-card p-3 rounded border border-wuxia-red/30 flex justify-between items-center">
-                          <span className="text-sm text-stone-300">遇到問題？</span>
-                          <button 
-                             onClick={() => { setShowBankInfo(false); setShowReport(true); }} 
-                             className="px-3 py-1 bg-wuxia-red/20 text-wuxia-red border border-wuxia-red rounded hover:bg-wuxia-red hover:text-white transition text-sm"
-                          >
-                             回報問題
-                          </button>
-                       </div>
-                    </div>
+                    <div className="text-center text-[10px] text-stone-600 mt-2">若您現在不方便付款，可關閉此視窗。<br/>您的訂單已保留，請記得在「票券夾」查看狀態。</div>
                   </div>
             </Modal>
 
