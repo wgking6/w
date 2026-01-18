@@ -2,11 +2,12 @@
 // 設定與全域變數 (CONFIGURATION & GLOBALS)
 // ----------------------------------------------------------------------------
 const APP_NAME = '遊戲方程式-自動發卡系統';
-const API_VERSION = 'v1.8.0'; // Updated with Order-First Flow
+const API_VERSION = 'v1.9.5'; // Updated: Chinese Status & Delivery Time
 const SPREADSHEET_ID = '1ywQDGsxE-lO5B3lxTJlozi0armhJb2m3cUIbjvwPuaM';
 
 // 安全性設定
-const ADMIN_PASSWORD = '8888'; // ★★★ 請在此修改您的管理密碼 ★★★
+const ADMIN_PASSWORD = '8888'; // 試算表選單用的密碼
+const ADMIN_LINE_ID = 'Ua66fd77f72e4524075afd856cae91587'; // ★★★ 超級管理員 LINE ID ★★★
 
 // 郵件對帳設定
 // 指定轉寄來源 (您的手機轉發信箱)
@@ -31,7 +32,8 @@ function getDB() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   
   ensureSheet(ss, SHEET_USERS, ['登入時間', 'User ID', '顯示名稱', '頭貼網址', '系統資訊']);
-  ensureSheet(ss, SHEET_ORDERS, ['訂單編號', '下單時間', 'User ID', '用戶名稱', '商品名稱', '金額', '數量', '卡號', '密碼', '狀態', '付款備註', '手動發貨']);
+  // Updated headers: Added '發貨時間'
+  ensureSheet(ss, SHEET_ORDERS, ['訂單編號', '下單時間', 'User ID', '用戶名稱', '商品名稱', '金額', '數量', '卡號', '密碼', '發貨時間', '狀態', '付款備註', '手動發貨']);
   ensureSheet(ss, SHEET_INVENTORY, ['商品ID', '類型', '遊戲種類', '卡號', '密碼', '有效期', '狀態']);
   ensureSheet(ss, SHEET_ISSUES, ['回報時間', 'User ID', '用戶名稱', '問題類型', '詳細描述', '處理狀態']);
   ensureSheet(ss, SHEET_PRODUCTS, ['商品ID', '商品名稱', '描述', '價格', '圖片連結', '分類']);
@@ -73,7 +75,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🎮 遊戲方程式管理')
       .addItem('📥 立即執行 Gmail 對帳', 'checkGmailDeposits')
-      .addItem('⚙️ 設定自動對帳頻率', 'setupGmailTrigger')
+      .addItem('⚙️ 啟用自動對帳 (5分鐘/次)', 'setupGmailTrigger')
       .addSeparator()
       .addItem('🔓 解鎖查看敏感資料', 'unlockSensitiveSheets')
       .addItem('🔒 立即鎖定隱藏資料', 'lockSensitiveSheets')
@@ -143,56 +145,38 @@ function unlockSensitiveSheets() {
 
 
 /**
- * 自動設定觸發器 (允許管理員自訂時間)
+ * 自動設定觸發器 (預設 5 分鐘，不詢問)
  */
 function setupGmailTrigger() {
   const ui = SpreadsheetApp.getUi();
   const triggerName = 'checkGmailDeposits';
   const triggers = ScriptApp.getProjectTriggers();
   
-  // 1. 檢查並詢問是否更新
-  let existingTrigger = null;
+  // 1. 檢查是否已存在
   for (const t of triggers) {
     if (t.getHandlerFunction() === triggerName) {
-      existingTrigger = t;
+      // 如果已存在，提示並詢問是否重設 (但主要是告知)
+      const response = ui.alert('自動對帳已啟用', '目前已經設定自動對帳功能。\n是否要重新設定為「每 5 分鐘」檢查一次？', ui.ButtonSet.YES_NO);
+      if (response == ui.Button.YES) {
+        ScriptApp.deleteTrigger(t); // 刪除舊的
+      } else {
+        return; // 取消操作
+      }
       break;
     }
   }
 
-  let promptMsg = '請輸入自動檢查頻率 (分鐘)\n\n建議設定：\n- 5 分鐘 (推薦，省電穩定)\n- 1 分鐘 (最快，耗費配額)\n\n支援數值：1, 5, 10, 15, 30';
-  if (existingTrigger) {
-    promptMsg = '⚠️ 目前已啟用自動對帳。\n\n若要修改頻率，請重新輸入分鐘數 (1, 5, 10, 15, 30)：';
-  }
-
-  const response = ui.prompt('設定自動對帳', promptMsg, ui.ButtonSet.OK_CANCEL);
-
-  if (response.getSelectedButton() == ui.Button.OK) {
-    const input = response.getResponseText().trim();
-    const minutes = parseInt(input, 10);
-    const validIntervals = [1, 5, 10, 15, 30];
-
-    if (!validIntervals.includes(minutes)) {
-      ui.alert('輸入錯誤', 'Google 系統僅支援以下頻率 (分鐘)：\n1, 5, 10, 15, 30\n\n請重新操作。', ui.ButtonSet.OK);
-      return;
-    }
-
-    try {
-      // 刪除舊的觸發器 (避免重複)
-      if (existingTrigger) {
-        ScriptApp.deleteTrigger(existingTrigger);
-      }
-
-      // 建立新的觸發器
-      ScriptApp.newTrigger(triggerName)
-        .timeBased()
-        .everyMinutes(minutes)
-        .create();
-      
-      ui.alert('設定成功', `✅ 已啟用自動對帳！\n頻率：每 ${minutes} 分鐘檢查一次。\n\n系統將自動在背景運行。`, ui.ButtonSet.OK);
-      
-    } catch (e) {
-      ui.alert('設定失敗', '無法建立觸發器，原因：' + e.toString(), ui.ButtonSet.OK);
-    }
+  try {
+    // 2. 建立新的觸發器 (預設 5 分鐘)
+    ScriptApp.newTrigger(triggerName)
+      .timeBased()
+      .everyMinutes(5)
+      .create();
+    
+    ui.alert('設定成功', `✅ 已啟用自動對帳！\n頻率：每 5 分鐘檢查一次。\n\n系統將自動在背景運行，您無需保持網頁開啟。`, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    ui.alert('設定失敗', '無法建立觸發器，原因：' + e.toString(), ui.ButtonSet.OK);
   }
 }
 
@@ -253,7 +237,8 @@ function forceCheckPendingOrders() {
   const data = sheet.getDataRange().getValues();
   let processedCount = 0;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][11] === true || data[i][11] === 'TRUE') {
+    // Checkbox is now at index 12 (Column M) due to added column
+    if (data[i][12] === true || data[i][12] === 'TRUE') {
        processManualFulfillment(sheet, i + 1);
        processedCount++;
     }
@@ -380,10 +365,13 @@ function matchAndFulfill(sheet, allData, parsedData) {
   // 遍歷所有訂單尋找匹配者
   for (let i = 1; i < allData.length; i++) {
     const row = allData[i];
-    const status = row[9]; // 狀態
-    const orderPrice = Number(row[5]); // 金額
+    // New Indices: 
+    // 0:ID, 1:Date, 2:UserID, 3:Name, 4:Prod, 5:Price, 6:Qty, 7:Code, 8:Pass, 
+    // 9:DelivTime, 10:Status, 11:Note, 12:Checkbox
+    const status = row[10]; // Status
+    const orderPrice = Number(row[5]); // Price
     
-    if (status !== 'Pending') continue;
+    if (status !== '待處理') continue; // Changed to Chinese '待處理'
 
     let isMatch = false;
 
@@ -398,7 +386,6 @@ function matchAndFulfill(sheet, allData, parsedData) {
          const diffMinutes = (paymentTime - orderTime) / (1000 * 60);
 
          // 條件：入帳時間必須在下單時間之後，且在 30 分鐘內
-         // 允許一點點誤差 (例如 -1 分鐘，防止伺服器時間些微不同步)，設定 >= -2
          if (diffMinutes >= -2 && diffMinutes <= 30) {
             isMatch = true;
             console.log(`[候選訂單] ID: ${row[0]}, 時間差: ${diffMinutes.toFixed(1)}分`);
@@ -407,7 +394,7 @@ function matchAndFulfill(sheet, allData, parsedData) {
 
     } else {
        // --- 方案 A: 傳統末五碼 + 金額 ---
-       const paymentNote = String(row[10]).trim();
+       const paymentNote = String(row[11]).trim(); // Note is now index 11
        const code = parsedData.code;
        // 寬鬆比對末五碼
        const codeMatch = (code && (paymentNote === String(code) || (String(code).endsWith(paymentNote) && paymentNote.length >= 4)));
@@ -517,10 +504,12 @@ function handleApiPost(e) {
     } else if (action === 'processCartOrder') {
       result = processCartOrder(data.user, data.paymentNote, data.cartItems);
     } else if (action === 'updateOrderPayment') {
-      // New Action for Update Payment
       result = updateOrderPayment(data.userId, data.orderId, data.paymentNote);
     } else if (action === 'submitIssue') {
       result = submitIssue(data.data);
+    } else if (action === 'adminAction') {
+      // ★ Admin Action Route
+      result = handleAdminAction(data);
     }
   } catch (err) {
     result = { success: false, message: 'Handler Error: ' + err.toString() };
@@ -528,6 +517,146 @@ function handleApiPost(e) {
   result._version = API_VERSION;
   result._serverTime = new Date().toISOString();
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ----------------------------------------------------------------------------
+// ADMIN BUSINESS LOGIC
+// ----------------------------------------------------------------------------
+
+function handleAdminAction(data) {
+  // 1. 安全檢查：驗證 Line ID
+  if (data.adminId !== ADMIN_LINE_ID) {
+    return { success: false, message: 'Unauthorized: Invalid Admin ID' };
+  }
+
+  const subAction = data.subAction;
+  const ss = getDB();
+
+  if (subAction === 'getDashboardData') {
+    return getAdminDashboardData(ss);
+  } else if (subAction === 'addInventory') {
+    return adminAddInventory(ss, data.payload);
+  } else if (subAction === 'deleteInventory') {
+    return adminDeleteInventory(ss, data.payload);
+  } else if (subAction === 'manualFulfill') {
+    return adminManualFulfill(ss, data.payload);
+  }
+
+  return { success: false, message: 'Unknown admin sub-action' };
+}
+
+function getAdminDashboardData(ss) {
+  // 取得庫存列表 (含產品名稱)
+  const invSheet = ss.getSheetByName(SHEET_INVENTORY);
+  const prodSheet = ss.getSheetByName(SHEET_PRODUCTS);
+  const orderSheet = ss.getSheetByName(SHEET_ORDERS);
+  const userSheet = ss.getSheetByName(SHEET_USERS);
+
+  // 1. 產品對照表
+  const prodData = prodSheet.getDataRange().getValues();
+  const productMap = {}; // ID -> Name
+  const productList = [];
+  for(let i=1; i<prodData.length; i++) {
+    productMap[prodData[i][0]] = prodData[i][1];
+    productList.push({ id: prodData[i][0], name: prodData[i][1] });
+  }
+
+  // 2. 庫存資料 (最近 100 筆或全部)
+  const invData = invSheet.getDataRange().getValues();
+  const inventory = [];
+  // 反向讀取，顯示最新的
+  for(let i=invData.length-1; i>=1; i--) {
+     if(inventory.length > 200) break; // 限制回傳數量避免太慢
+     const row = invData[i];
+     inventory.push({
+       rowIndex: i + 1,
+       productId: row[0],
+       productName: productMap[row[0]] || row[0],
+       code: row[3],
+       password: row[4],
+       status: row[6]
+     });
+  }
+
+  // 3. 待處理訂單
+  const orderData = orderSheet.getDataRange().getValues();
+  const pendingOrders = [];
+  for(let i=1; i<orderData.length; i++) {
+    const row = orderData[i];
+    // Check Status at index 10 (Column K)
+    if (row[10] === '待處理') { 
+       pendingOrders.push({
+         rowIndex: i + 1,
+         orderId: row[0],
+         date: new Date(row[1]).toLocaleString(),
+         userName: row[3],
+         productName: row[4],
+         price: row[5],
+         paymentNote: row[11] // Note at index 11
+       });
+    }
+  }
+
+  // 4. 用戶列表 (最近 20 筆)
+  const userData = userSheet.getDataRange().getValues();
+  const users = [];
+  for(let i=userData.length-1; i>=1; i--) {
+     if(users.length > 20) break;
+     users.push({
+        date: new Date(userData[i][0]).toLocaleString(),
+        name: userData[i][2],
+        uid: userData[i][1]
+     });
+  }
+
+  return {
+    success: true,
+    products: productList,
+    inventory: inventory,
+    orders: pendingOrders,
+    users: users
+  };
+}
+
+function adminAddInventory(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_INVENTORY);
+  // payload: { productId, items: [{code, pass}] }
+  const items = payload.items;
+  const prodId = payload.productId;
+  
+  // 簡易查詢產品類型
+  // 若要更嚴謹需查 Product Sheet，這邊先預設
+  
+  items.forEach(item => {
+    sheet.appendRow([
+      prodId, 
+      'AdminAdd', 
+      'Manual', 
+      item.code, 
+      item.pass || '', 
+      '2099-12-31', 
+      'Available'
+    ]);
+  });
+  
+  return { success: true, count: items.length };
+}
+
+function adminDeleteInventory(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_INVENTORY);
+  const rowIndex = payload.rowIndex;
+  if (rowIndex > 1) {
+    sheet.deleteRow(rowIndex);
+    return { success: true };
+  }
+  return { success: false, message: 'Invalid row' };
+}
+
+function adminManualFulfill(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  const rowIndex = payload.rowIndex;
+  // Reuse existing logic
+  return executeFulfillment(sheet, rowIndex, null);
 }
 
 // ----------------------------------------------------------------------------
@@ -599,12 +728,13 @@ function processCartOrder(userObj, paymentNote, cartItems) {
         item.quantity,
         '', // Code 
         '', // Password
-        'Pending', 
+        '', // ★ Delivery Time (New) - Empty initially
+        '待處理', // ★ Status (Changed to Chinese)
         note,
         false // Checkbox placeholder
       ];
       orderSheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
-      orderSheet.getRange(nextRow, 12).insertCheckboxes();
+      orderSheet.getRange(nextRow, 13).insertCheckboxes(); // Checkbox is at index 12 (Col 13)
       resultItems.push({ name: item.name, quantity: item.quantity });
       nextRow++; 
     }
@@ -635,8 +765,8 @@ function updateOrderPayment(userId, orderId, paymentNote) {
     // 搜尋符合 OrderID 與 UserID 的訂單 (確保安全性)
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(orderId) && String(data[i][2]) === String(userId)) {
-        // 更新第 11 欄 (Index 10) 為付款備註
-        sheet.getRange(i + 1, 11).setValue(String(paymentNote));
+        // 更新第 12 欄 (Index 11) 為付款備註
+        sheet.getRange(i + 1, 12).setValue(String(paymentNote));
         updatedCount++;
       }
     }
@@ -697,8 +827,8 @@ function onEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
   if (sheet.getName() !== SHEET_ORDERS) return;
-  // 如果是 L 欄 (12) 被勾選
-  if (range.getColumn() === 12 && (e.value === 'TRUE' || e.value === true)) {
+  // 如果是 M 欄 (13) 被勾選
+  if (range.getColumn() === 13 && (e.value === 'TRUE' || e.value === true)) {
     const row = range.getRow();
     if (row === 1) return; 
     
@@ -708,7 +838,7 @@ function onEdit(e) {
       SpreadsheetApp.getActive().toast(result.message, '成功');
     } else {
       // 失敗則取消勾選
-      sheet.getRange(row, 12).uncheck();
+      sheet.getRange(row, 13).uncheck();
       SpreadsheetApp.getActive().toast(result.message, '發貨失敗');
     }
   }
@@ -720,7 +850,7 @@ function processManualFulfillment(orderSheet, rowIndex) {
   if (result.success) {
      SpreadsheetApp.getActive().toast(result.message, '成功');
   } else {
-     orderSheet.getRange(rowIndex, 12).uncheck();
+     orderSheet.getRange(rowIndex, 13).uncheck();
      SpreadsheetApp.getActive().toast(result.message, '失敗');
   }
 }
@@ -730,7 +860,8 @@ function processManualFulfillment(orderSheet, rowIndex) {
  * 供 onEdit (手動) 和 checkGmailDeposits (自動) 共用
  */
 function executeFulfillment(orderSheet, rowIndex, providedRowData) {
-  const rowData = providedRowData || orderSheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  // Read 13 columns now
+  const rowData = providedRowData || orderSheet.getRange(rowIndex, 1, 1, 13).getValues()[0];
   const orderId = rowData[0];
   const productName = rowData[4];
   const qtyNeeded = rowData[6] || 1;
@@ -739,7 +870,7 @@ function executeFulfillment(orderSheet, rowIndex, providedRowData) {
   // 1. 檢查是否已發過貨
   if (currentCode && currentCode.toString().trim() !== '') {
     // 雖然已有卡號，但為了讓 checkbox 狀態正確，還是回傳 success
-    orderSheet.getRange(rowIndex, 12).uncheck(); 
+    orderSheet.getRange(rowIndex, 13).uncheck(); 
     return { success: true, message: `訂單 ${orderId} 已有卡號，無需補發` };
   }
 
@@ -792,10 +923,13 @@ function executeFulfillment(orderSheet, rowIndex, providedRowData) {
   
   orderSheet.getRange(rowIndex, 8).setValue(finalCodes);
   orderSheet.getRange(rowIndex, 9).setValue(finalPass);
-  orderSheet.getRange(rowIndex, 10).setValue('Completed'); 
   
-  // 保持 Checkbox unchecked (因為已經處理完了，不需要打勾留在哪)
-  orderSheet.getRange(rowIndex, 12).uncheck(); 
+  // ★ Update Delivery Time & Status (Chinese)
+  orderSheet.getRange(rowIndex, 10).setValue(new Date()); // Column J: Delivery Time
+  orderSheet.getRange(rowIndex, 11).setValue('已發貨'); // Column K: Status
+  
+  // Uncheck Checkbox (Col 13)
+  orderSheet.getRange(rowIndex, 13).uncheck(); 
   
   SpreadsheetApp.flush();
   return { success: true, message: `訂單 ${orderId} 發貨成功` };
