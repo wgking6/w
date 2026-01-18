@@ -88,6 +88,9 @@
       // 建構 LIFF URL
       const LIFF_URL = `https://liff.line.me/${LIFF_ID}`;
 
+      // GAS API Endpoint for Vercel/External Access
+      const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxo-_jcz9ApUTS6ENUAKYmg5ggT3h8AGAoulKlMZu4uSh-hx5yCC2qOr6XLLhedjKBsew/exec';
+
       const LOGO_URL = 'https://placehold.co/200x200/991b1b/fbbf24?text=Game'; 
       const BANK_INFO = {
         code: '823',
@@ -116,17 +119,14 @@
               .withFailureHandler((err) => reject(new Error(err.message || err)))
               .getProducts();
           } else {
-            console.log('Mock: getProducts');
-            setTimeout(() => {
-              resolve([
-                { id: 'pc-1', name: '新武林同萌傳輔助 - 30天月卡', description: '暢遊武林！30天尊榮會員', price: 150, imageUrl: 'https://i.ibb.co/WvYhdmc7/30.jpg', category: '電腦遊戲' },
-                { id: 'pc-2', name: '新武林同萌傳輔助 - 360天年卡', description: '年度超值方案！', price: 1050, imageUrl: 'https://i.ibb.co/Bvh6JKn/360.jpg', category: '電腦遊戲' },
-                { id: 'pc-3', name: '艾爾之光輔助 - 月卡', description: '每日領取K-Ching', price: 800, imageUrl: 'https://i.ibb.co/xKKmw5ZQ/image.jpg', category: '電腦遊戲' },
-                { id: 'mob-chaos', name: '卡厄思夢境輔助 - 月卡', description: '夢境冒險，每日領取鑽石', price: 250, imageUrl: 'https://i.ibb.co/F447LW0Z/image.jpg', category: '手機遊戲' },
-                { id: 'mob-ro', name: 'RO仙境傳說輔助 - 月卡', description: '月卡福利加倍', price: 250, imageUrl: 'https://i.ibb.co/sdddNjrb/RO.jpg', category: '手機遊戲' },
-                { id: 'mob-hot', name: '熱血江湖：福利加強版輔助 - 月卡', description: '熱血重燃，福利滿滿', price: 250, imageUrl: 'https://i.ibb.co/7tyRH2Hr/image.jpg', category: '手機遊戲' }
-              ]);
-            }, 800);
+            // Use Fetch for External Env (Vercel)
+            fetch(`${GAS_API_URL}?action=getProducts`)
+              .then(res => res.json())
+              .then(data => {
+                 if (data.error) reject(new Error(data.error));
+                 else resolve(data);
+              })
+              .catch(err => reject(err));
           }
         });
       };
@@ -139,11 +139,13 @@
               .withFailureHandler((err) => reject(new Error(err.message || err)))
               .getUserOrders(userId);
           } else {
-             // Mock data update to test empty codes
-             resolve([
-               { orderId: 'MOCK-OLD', date: new Date().toISOString(), productName: '已發貨商品', price: 150, quantity: 1, codes: 'CODE-123', passwords: 'PASS-123' },
-               { orderId: 'MOCK-NEW', date: new Date().toISOString(), productName: '等待發貨中', price: 250, quantity: 1, codes: '', passwords: '' }
-             ]);
+             fetch(`${GAS_API_URL}?action=getUserOrders&userId=${userId}`)
+              .then(res => res.json())
+              .then(data => {
+                 if (data.error) reject(new Error(data.error));
+                 else resolve(data);
+              })
+              .catch(err => reject(err));
           }
         });
       };
@@ -152,7 +154,11 @@
         if (isGAS) {
           google.script.run.logUserAccess(user);
         } else {
-          console.log('Mock: logUser', user);
+          // Send Beacon or async fetch
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'logUserAccess', data: user })
+          }).catch(console.error);
         }
       };
 
@@ -171,20 +177,21 @@
                .withFailureHandler((err) => reject(new Error(err.message || err)))
                .processCartOrder(user, paymentNote, itemsForBackend);
            } else {
-             setTimeout(() => {
-                const resultItems = cartItems.map(item => ({
-                   name: item.product.name,
-                   quantity: item.quantity,
-                   codes: '', // Mock: No codes immediately
-                   passwords: ''
-                }));
-                resolve({
-                   success: true,
-                   message: 'Mock Cart Success',
-                   orderId: 'MOCK-CART-' + Date.now(),
-                   items: resultItems
-                });
-             }, 1500);
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                   action: 'processCartOrder', 
+                   user: user, 
+                   paymentNote: paymentNote, 
+                   cartItems: itemsForBackend 
+                })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Order failed'));
+             })
+             .catch(err => reject(err));
            }
         });
       };
@@ -197,7 +204,16 @@
               .withFailureHandler((err) => reject(new Error(err.message || err)))
               .submitIssue(data);
           } else {
-             setTimeout(() => resolve({ success: true, message: 'Mock report sent.' }), 1000);
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'submitIssue', data: data })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Report failed'));
+             })
+             .catch(err => reject(err));
           }
         });
       };

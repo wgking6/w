@@ -2,7 +2,8 @@
 // 設定與全域變數 (CONFIGURATION & GLOBALS)
 // ----------------------------------------------------------------------------
 const APP_NAME = '遊戲方程式-自動發卡系統';
-const SPREADSHEET_ID = '13_DaaMWDT3h4c0bB1jkKCFXw_CvVCKDSgesuy0AwZRM';
+// Updated Spreadsheet ID
+const SPREADSHEET_ID = '1ywQDGsxE-lO5B3lxTJlozi0armhJb2m3cUIbjvwPuaM';
 
 // 定義分頁名稱
 const SHEET_USERS = '用戶資訊';
@@ -55,7 +56,17 @@ function ensureSheet(ss, sheetName, headers) {
   return sheet;
 }
 
+// ----------------------------------------------------------------------------
+// API ROUTING (WEB APP ENTRY POINTS)
+// ----------------------------------------------------------------------------
+
 function doGet(e) {
+  // Check if it's an API request
+  if (e.parameter && e.parameter.action) {
+    return handleApiGet(e);
+  }
+
+  // Otherwise serve the HTML template (Legacy/GAS Mode)
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('遊戲方程式 Game Equation')
@@ -63,8 +74,64 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+function doPost(e) {
+  return handleApiPost(e);
+}
+
 // ----------------------------------------------------------------------------
-// API FUNCTIONS (前端呼叫)
+// API HANDLERS
+// ----------------------------------------------------------------------------
+
+function handleApiGet(e) {
+  const action = e.parameter.action;
+  let result = {};
+
+  try {
+    if (action === 'getProducts') {
+      result = getProducts();
+    } else if (action === 'getUserOrders') {
+      result = getUserOrders(e.parameter.userId);
+    } else {
+      result = { error: 'Unknown action' };
+    }
+  } catch (err) {
+    result = { error: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleApiPost(e) {
+  let data;
+  try {
+    data = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const action = data.action;
+  let result = { success: false, message: 'Unknown action' };
+
+  try {
+    if (action === 'logUserAccess') {
+      result = logUserAccess(data.data);
+    } else if (action === 'processCartOrder') {
+      result = processCartOrder(data.user, data.paymentNote, data.cartItems);
+    } else if (action === 'submitIssue') {
+      result = submitIssue(data.data);
+    }
+  } catch (err) {
+    result = { success: false, message: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ----------------------------------------------------------------------------
+// INTERNAL BUSINESS LOGIC
 // ----------------------------------------------------------------------------
 
 function logUserAccess(userProfile) {
@@ -96,10 +163,7 @@ function getProducts() {
 }
 
 /**
- * 處理購物車訂單 (修改版：僅建立訂單，不扣庫存)
- * @param {Object} userObj { userId, displayName }
- * @param {string} paymentNote 後五碼
- * @param {Array} cartItems [{ productId, quantity, name, price }]
+ * 處理購物車訂單
  */
 function processCartOrder(userObj, paymentNote, cartItems) {
   const lock = LockService.getScriptLock();
@@ -158,7 +222,7 @@ function processCartOrder(userObj, paymentNote, cartItems) {
 }
 
 /**
- * 取得用戶的所有訂單 (票券夾功能)
+ * 取得用戶的所有訂單
  */
 function getUserOrders(userId) {
   const ss = getDB();
@@ -167,10 +231,8 @@ function getUserOrders(userId) {
   
   const myOrders = [];
   // 從第2列開始 (跳過標題)
-  // 欄位: 0:ID, 1:Time, 2:UserID, 3:Name, 4:Prod, 5:Price, 6:Qty, 7:Code, 8:Pass
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][2]) === String(userId)) {
-      // 安全處理日期格式，避免回傳 GAS Date 物件導致錯誤
       let dateStr = "";
       try {
          dateStr = data[i][1] instanceof Date ? data[i][1].toISOString() : String(data[i][1]);
