@@ -2,7 +2,7 @@
 // 設定與全域變數 (CONFIGURATION & GLOBALS)
 // ----------------------------------------------------------------------------
 const APP_NAME = '遊戲方程式-自動發卡系統';
-// Updated Spreadsheet ID
+const API_VERSION = 'v1.1.0'; // 用於確認前端是否連到最新版後端
 const SPREADSHEET_ID = '1ywQDGsxE-lO5B3lxTJlozi0armhJb2m3cUIbjvwPuaM';
 
 // 定義分頁名稱
@@ -35,6 +35,7 @@ function ensureSheet(ss, sheetName, headers) {
     sheet.appendRow(headers);
     sheet.setFrozenRows(1);
     
+    // 初始化預設商品
     if (sheetName === SHEET_PRODUCTS) {
       sheet.appendRow(['pc-1', '新武林同萌傳輔助 - 30天月卡', '暢遊武林！30天尊榮會員', 150, 'https://i.ibb.co/WvYhdmc7/30.jpg', '電腦遊戲']);
       sheet.appendRow(['pc-2', '新武林同萌傳輔助 - 360天年卡', '年度超值方案！加贈坐騎', 1050, 'https://i.ibb.co/Bvh6JKn/360.jpg', '電腦遊戲']);
@@ -43,27 +44,25 @@ function ensureSheet(ss, sheetName, headers) {
       sheet.appendRow(['mob-ro', 'RO仙境傳說輔助 - 月卡', '重返普隆德拉，月卡福利加倍', 250, 'https://i.ibb.co/sdddNjrb/RO.jpg', '手機遊戲']);
       sheet.appendRow(['mob-hot', '熱血江湖：福利加強版輔助 - 月卡', '熱血重燃，福利滿滿', 250, 'https://i.ibb.co/7tyRH2Hr/image.jpg', '手機遊戲']);
     }
+    // 初始化庫存範例
     if (sheetName === SHEET_INVENTORY) {
       for(let i=0; i<5; i++) {
         sheet.appendRow(['pc-1', '月卡', '新武林同萌傳', `CODE-TEST-${i}`, `PASS-${i}`, '2025-12-31', 'Available']);
       }
     }
-    // 移除：不再預先插入 L2:L1000 的核取方塊，避免佔用列數導致 appendRow 寫入到千行之後
+    // 注意：不再預先插入 Checkbox，避免影響寫入位置
   }
   return sheet;
 }
 
 // ----------------------------------------------------------------------------
-// API ROUTING (WEB APP ENTRY POINTS)
+// API ROUTING
 // ----------------------------------------------------------------------------
 
 function doGet(e) {
-  // Check if it's an API request
   if (e.parameter && e.parameter.action) {
     return handleApiGet(e);
   }
-
-  // Otherwise serve the HTML template (Legacy/GAS Mode)
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('遊戲方程式 Game Equation')
@@ -72,7 +71,16 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  return handleApiPost(e);
+  // 將整個 doPost 包在 try-catch 中，確保即使發生嚴重錯誤也能回傳 JSON
+  try {
+    return handleApiPost(e);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      message: 'Critical Server Error: ' + err.toString(),
+      _version: API_VERSION
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -94,6 +102,8 @@ function handleApiGet(e) {
   } catch (err) {
     result = { error: err.toString() };
   }
+  
+  result._version = API_VERSION; // 附加版本號
 
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
@@ -102,14 +112,13 @@ function handleApiGet(e) {
 function handleApiPost(e) {
   let data;
   try {
-    // 優先解析 contents，如果是透過 text/plain 送來的
     if (e.postData && e.postData.contents) {
        data = JSON.parse(e.postData.contents);
     } else if (e.parameter) {
        data = e.parameter;
     }
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON: ' + err.toString() }))
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON body: ' + err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -130,8 +139,11 @@ function handleApiPost(e) {
       result = submitIssue(data.data);
     }
   } catch (err) {
-    result = { success: false, message: err.toString() };
+    result = { success: false, message: 'Handler Error: ' + err.toString() };
   }
+
+  result._version = API_VERSION;
+  result._serverTime = new Date().toISOString();
 
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
@@ -170,42 +182,37 @@ function getProducts() {
 }
 
 /**
- * 輔助函數：尋找下一個真正的空白列（忽略僅有核取方塊的列）
+ * 智能尋找空白列：跳過僅有 Checkbox 的假資料列
  */
 function getNextRealEmptyRow(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return 2;
   
-  // 讀取 A 欄 (訂單編號) 來判斷真正的最後一筆資料在哪
-  // 這樣即使 L 欄有核取方塊，我們也能找到正確的寫入點
+  // 讀取 A 欄 (訂單編號) 來判斷真正的資料尾端
   const range = sheet.getRange(1, 1, lastRow, 1).getValues();
   
   for (let i = range.length - 1; i >= 0; i--) {
     if (range[i][0] && String(range[i][0]).trim() !== "") {
-      return i + 2; // 資料在 index i (row i+1)，所以下一列是 i+2
+      return i + 2; 
     }
   }
-  return 2; // 如果整欄都空，從第 2 列開始
+  return 2; 
 }
 
-/**
- * 處理購物車訂單
- */
 function processCartOrder(userObj, paymentNote, cartItems) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000); 
-  } catch (e) {
-    return { success: false, message: '系統忙碌中，請稍後重試' };
-  }
-
-  try {
+    const hasLock = lock.tryLock(10000);
+    if (!hasLock) {
+      return { success: false, message: '系統忙碌，請稍後再試 (Lock Timeout)' };
+    }
+    
     const ss = getDB();
     const orderSheet = ss.getSheetByName(SHEET_ORDERS);
     const orderId = 'ORD-' + Date.now();
     let resultItems = []; 
 
-    // 使用智慧偵測找到正確的寫入列
+    // 使用智能偵測
     let nextRow = getNextRealEmptyRow(orderSheet);
 
     for (let item of cartItems) {
@@ -217,28 +224,25 @@ function processCartOrder(userObj, paymentNote, cartItems) {
         item.name,
         Number(item.price) * Number(item.quantity),
         item.quantity,
-        '', // Code 留空
-        '', // Password 留空
+        '', // Code 
+        '', // Password
         'Pending', 
         String(paymentNote || ''),
-        false // 手動發貨 Checkbox
+        false // Checkbox placeholder (會被下面的 insertCheckboxes 取代)
       ];
 
-      // 使用 setValues 指定寫入特定列，而非 appendRow
+      // 強制寫入指定列
       orderSheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
       
-      // 確保該列有核取方塊
+      // 在該列插入 Checkbox
       orderSheet.getRange(nextRow, 12).insertCheckboxes();
 
-      resultItems.push({
-        name: item.name,
-        quantity: item.quantity,
-        codes: '', 
-        passwords: ''
-      });
-      
-      nextRow++; // 下一筆商品往下寫
+      resultItems.push({ name: item.name, quantity: item.quantity });
+      nextRow++; 
     }
+    
+    // 強制刷新緩衝區，確保立即寫入
+    SpreadsheetApp.flush();
 
     return {
       success: true,
@@ -248,31 +252,22 @@ function processCartOrder(userObj, paymentNote, cartItems) {
     };
 
   } catch (err) {
-    return { success: false, message: '伺服器錯誤: ' + err.toString() };
+    return { success: false, message: 'Process Error: ' + err.toString() };
   } finally {
     lock.releaseLock();
   }
 }
 
-/**
- * 取得用戶的所有訂單
- */
 function getUserOrders(userId) {
   const ss = getDB();
   const sheet = ss.getSheetByName(SHEET_ORDERS);
   const data = sheet.getDataRange().getValues();
   
   const myOrders = [];
-  // 從第2列開始 (跳過標題)
   for (let i = 1; i < data.length; i++) {
-    // 檢查欄位是否存在，避免讀取到空白列報錯
     if (data[i] && String(data[i][2]) === String(userId)) {
       let dateStr = "";
-      try {
-         dateStr = data[i][1] instanceof Date ? data[i][1].toISOString() : String(data[i][1]);
-      } catch(e) {
-         dateStr = String(data[i][1]);
-      }
+      try { dateStr = data[i][1] instanceof Date ? data[i][1].toISOString() : String(data[i][1]); } catch(e) { dateStr = String(data[i][1]); }
 
       myOrders.push({
         orderId: data[i][0],
@@ -300,24 +295,22 @@ function submitIssue(issueData) {
 }
 
 // ----------------------------------------------------------------------------
-// SPREADSHEET TRIGGER (手動發貨功能)
+// TRIGGER
 // ----------------------------------------------------------------------------
 
 function onEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
-  
   if (sheet.getName() !== SHEET_ORDERS) return;
-  
   if (range.getColumn() === 12 && e.value === 'TRUE') {
     const row = range.getRow();
     if (row === 1) return; 
-
     processManualFulfillment(sheet, row);
   }
 }
 
 function processManualFulfillment(orderSheet, rowIndex) {
+  // (此段邏輯維持不變，省略以節省篇幅，確保您保留原有的發貨邏輯)
   const rowData = orderSheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
   const productName = rowData[4];
   const qtyNeeded = rowData[6] || 1;
@@ -378,7 +371,6 @@ function processManualFulfillment(orderSheet, rowIndex) {
   orderSheet.getRange(rowIndex, 8).setValue(finalCodes);
   orderSheet.getRange(rowIndex, 9).setValue(finalPass);
   orderSheet.getRange(rowIndex, 10).setValue('Manual Filled'); 
-  
   orderSheet.getRange(rowIndex, 12).uncheck();
   
   SpreadsheetApp.getActive().toast(`訂單 ${rowData[0]} 手動發貨成功！`, '成功');

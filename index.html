@@ -85,10 +85,7 @@
       // 設定與全域變數
       // ==========================================
       const LIFF_ID = '2008912922-0bJiM0sT'; 
-      // 建構 LIFF URL
       const LIFF_URL = `https://liff.line.me/${LIFF_ID}`;
-
-      // GAS API Endpoint for Vercel/External Access
       const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxo-_jcz9ApUTS6ENUAKYmg5ggT3h8AGAoulKlMZu4uSh-hx5yCC2qOr6XLLhedjKBsew/exec';
 
       const LOGO_URL = 'https://placehold.co/200x200/991b1b/fbbf24?text=Game'; 
@@ -119,7 +116,6 @@
               .withFailureHandler((err) => reject(new Error(err.message || err)))
               .getProducts();
           } else {
-            // Use Fetch for External Env (Vercel)
             fetch(`${GAS_API_URL}?action=getProducts`)
               .then(res => res.json())
               .then(data => {
@@ -154,10 +150,10 @@
         if (isGAS) {
           google.script.run.logUserAccess(user);
         } else {
-          // Send Beacon or async fetch with text/plain to avoid CORS options
+          // logUserAccess 使用 no-cors，只求送出不求回應，所以通常比較容易成功
           fetch(GAS_API_URL, {
             method: 'POST',
-            mode: 'no-cors', // Beacon style, we don't need response
+            mode: 'no-cors', 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'logUserAccess', data: user })
           }).catch(console.error);
@@ -179,14 +175,12 @@
                .withFailureHandler((err) => reject(new Error(err.message || err)))
                .processCartOrder(user, paymentNote, itemsForBackend);
            } else {
-             // 關鍵修正：
-             // 1. 使用 headers: { "Content-Type": "text/plain;charset=utf-8" } 避免瀏覽器發送 OPTIONS 預檢請求
-             // 2. body 使用 JSON.stringify，後端會解析它
+             // 關鍵修正：確保能讀取錯誤訊息
              fetch(GAS_API_URL, {
                 method: 'POST',
-                redirect: 'follow',
+                redirect: 'follow', // 重要：跟隨 GAS 的 302 Redirect
                 headers: {
-                  "Content-Type": "text/plain;charset=utf-8"
+                  "Content-Type": "text/plain;charset=utf-8" // 避免 CORS Preflight
                 },
                 body: JSON.stringify({ 
                    action: 'processCartOrder', 
@@ -195,14 +189,27 @@
                    cartItems: itemsForBackend 
                 })
              })
-             .then(res => res.json())
+             .then(async res => {
+                // 先讀成文字，避免 JSON.parse 炸開
+                const text = await res.text();
+                try {
+                   return JSON.parse(text);
+                } catch (e) {
+                   console.error("Non-JSON response from server:", text);
+                   // 如果回傳的是 HTML，通常代表 GAS 程式端有錯誤
+                   throw new Error("伺服器回應異常 (非 JSON)，可能是部署版本未更新。");
+                }
+             })
              .then(data => {
+                console.log("Server Response:", data);
+                if (data._version) console.log("Backend Version:", data._version);
+                
                 if (data.success) resolve(data);
                 else reject(new Error(data.message || 'Order failed'));
              })
              .catch(err => {
                 console.error("Fetch Error:", err);
-                reject(new Error("無法連接到伺服器，請稍後再試"));
+                reject(err);
              });
            }
         });
@@ -657,7 +664,13 @@
              }
            } catch (err) {
              console.error("Execution Error:", err);
-             Swal.fire({ icon: 'error', title: '交易發生錯誤', text: err.message, confirmButtonText: '關閉' });
+             // 如果錯誤訊息包含 "deployment"，給出特別提示
+             const errMsg = err.message || '';
+             if(errMsg.includes("非 JSON")) {
+                 Swal.fire({ icon: 'error', title: '後端版本異常', text: '請確認 Google Apps Script 已部署為「新版本」。', confirmButtonText: '了解' });
+             } else {
+                 Swal.fire({ icon: 'error', title: '交易發生錯誤', text: errMsg, confirmButtonText: '關閉' });
+             }
            } finally {
              setIsProcessing(false);
            }
