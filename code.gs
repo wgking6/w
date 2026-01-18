@@ -1,0 +1,289 @@
+// ----------------------------------------------------------------------------
+// 設定與全域變數 (CONFIGURATION & GLOBALS)
+// ----------------------------------------------------------------------------
+const APP_NAME = '遊戲方程式-自動發卡系統';
+const SPREADSHEET_ID = '13_DaaMWDT3h4c0bB1jkKCFXw_CvVCKDSgesuy0AwZRM';
+
+// 定義分頁名稱
+const SHEET_USERS = '用戶資訊';
+const SHEET_ORDERS = '訂單紀錄';
+const SHEET_INVENTORY = '卡號資訊'; 
+const SHEET_ISSUES = '問題回報';
+const SHEET_PRODUCTS = '商品設定'; 
+
+// ----------------------------------------------------------------------------
+// 核心：自動化資料庫連接 (CORE: AUTO DATABASE CONNECTION)
+// ----------------------------------------------------------------------------
+
+function getDB() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  ensureSheet(ss, SHEET_USERS, ['登入時間', 'User ID', '顯示名稱', '頭貼網址', '系統資訊']);
+  ensureSheet(ss, SHEET_ORDERS, ['訂單編號', '下單時間', 'User ID', '用戶名稱', '商品名稱', '金額', '數量', '卡號', '密碼', '狀態', '付款備註', '手動發貨']);
+  ensureSheet(ss, SHEET_INVENTORY, ['商品ID', '類型', '遊戲種類', '卡號', '密碼', '有效期', '狀態']);
+  ensureSheet(ss, SHEET_ISSUES, ['回報時間', 'User ID', '用戶名稱', '問題類型', '詳細描述', '處理狀態']);
+  ensureSheet(ss, SHEET_PRODUCTS, ['商品ID', '商品名稱', '描述', '價格', '圖片連結', '分類']);
+
+  return ss;
+}
+
+function ensureSheet(ss, sheetName, headers) {
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+    
+    if (sheetName === SHEET_PRODUCTS) {
+      sheet.appendRow(['pc-1', '新武林同萌傳輔助 - 30天月卡', '暢遊武林！30天尊榮會員', 150, 'https://i.ibb.co/WvYhdmc7/30.jpg', '電腦遊戲']);
+      sheet.appendRow(['pc-2', '新武林同萌傳輔助 - 360天年卡', '年度超值方案！加贈坐騎', 1050, 'https://i.ibb.co/Bvh6JKn/360.jpg', '電腦遊戲']);
+      sheet.appendRow(['pc-3', '艾爾之光輔助 - 月卡', '艾里奧斯大陸冒險必備，每日領取K-Ching', 800, 'https://i.ibb.co/xKKmw5ZQ/image.jpg', '電腦遊戲']);
+      sheet.appendRow(['mob-chaos', '卡厄思夢境輔助 - 月卡', '夢境冒險，每日領取鑽石', 250, 'https://i.ibb.co/F447LW0Z/image.jpg', '手機遊戲']);
+      sheet.appendRow(['mob-ro', 'RO仙境傳說輔助 - 月卡', '重返普隆德拉，月卡福利加倍', 250, 'https://i.ibb.co/sdddNjrb/RO.jpg', '手機遊戲']);
+      sheet.appendRow(['mob-hot', '熱血江湖：福利加強版輔助 - 月卡', '熱血重燃，福利滿滿', 250, 'https://i.ibb.co/7tyRH2Hr/image.jpg', '手機遊戲']);
+    }
+    if (sheetName === SHEET_INVENTORY) {
+      for(let i=0; i<5; i++) {
+        sheet.appendRow(['pc-1', '月卡', '新武林同萌傳', `CODE-TEST-${i}`, `PASS-${i}`, '2025-12-31', 'Available']);
+      }
+    }
+    if (sheetName === SHEET_ORDERS) {
+       const range = sheet.getRange("L2:L1000");
+       range.insertCheckboxes();
+    }
+  }
+  return sheet;
+}
+
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('index')
+    .evaluate()
+    .setTitle('遊戲方程式 Game Equation')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// ----------------------------------------------------------------------------
+// API FUNCTIONS (前端呼叫)
+// ----------------------------------------------------------------------------
+
+function logUserAccess(userProfile) {
+  const ss = getDB();
+  const sheet = ss.getSheetByName(SHEET_USERS);
+  sheet.appendRow([new Date(), userProfile.userId, userProfile.displayName, userProfile.pictureUrl, userProfile.os || 'Unknown']);
+  return { success: true };
+}
+
+function getProducts() {
+  const ss = getDB();
+  const sheet = ss.getSheetByName(SHEET_PRODUCTS);
+  const data = sheet.getDataRange().getValues();
+  const products = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0]) {
+      products.push({
+        id: row[0],
+        name: row[1],
+        description: row[2],
+        price: Number(row[3]),
+        imageUrl: row[4],
+        category: row[5]
+      });
+    }
+  }
+  return products;
+}
+
+/**
+ * 處理購物車訂單 (修改版：僅建立訂單，不扣庫存)
+ * @param {Object} userObj { userId, displayName }
+ * @param {string} paymentNote 後五碼
+ * @param {Array} cartItems [{ productId, quantity, name, price }]
+ */
+function processCartOrder(userObj, paymentNote, cartItems) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); 
+  } catch (e) {
+    return { success: false, message: '系統忙碌中，請稍後重試' };
+  }
+
+  try {
+    const ss = getDB();
+    const orderSheet = ss.getSheetByName(SHEET_ORDERS);
+    const orderId = 'ORD-' + Date.now();
+    let resultItems = []; 
+
+    for (let item of cartItems) {
+      // 寫入訂單表，但卡號/密碼留空
+      orderSheet.appendRow([
+        orderId,
+        new Date(),
+        userObj.userId,
+        userObj.displayName,
+        item.name,
+        Number(item.price) * Number(item.quantity),
+        item.quantity,
+        '', // Code 留空 (等待客服發貨)
+        '', // Password 留空
+        'Pending', // 狀態改為待處理
+        String(paymentNote || ''),
+        false // 手動發貨 Checkbox (預設不打勾)
+      ]);
+
+      // 幫 Checkbox 加最後一欄
+      orderSheet.getRange(orderSheet.getLastRow(), 12).insertCheckboxes();
+
+      resultItems.push({
+        name: item.name,
+        quantity: item.quantity,
+        codes: '', 
+        passwords: ''
+      });
+    }
+
+    return {
+      success: true,
+      message: '訂單已提交',
+      orderId: orderId,
+      items: resultItems
+    };
+
+  } catch (err) {
+    return { success: false, message: '伺服器錯誤: ' + err.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 取得用戶的所有訂單 (票券夾功能)
+ */
+function getUserOrders(userId) {
+  const ss = getDB();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  const data = sheet.getDataRange().getValues();
+  
+  const myOrders = [];
+  // 從第2列開始 (跳過標題)
+  // 欄位: 0:ID, 1:Time, 2:UserID, 3:Name, 4:Prod, 5:Price, 6:Qty, 7:Code, 8:Pass
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][2]) === String(userId)) {
+      // 安全處理日期格式，避免回傳 GAS Date 物件導致錯誤
+      let dateStr = "";
+      try {
+         dateStr = data[i][1] instanceof Date ? data[i][1].toISOString() : String(data[i][1]);
+      } catch(e) {
+         dateStr = String(data[i][1]);
+      }
+
+      myOrders.push({
+        orderId: data[i][0],
+        date: dateStr,
+        productName: data[i][4],
+        price: data[i][5],
+        quantity: data[i][6],
+        codes: data[i][7],
+        passwords: data[i][8]
+      });
+    }
+  }
+  return myOrders.reverse();
+}
+
+function submitIssue(issueData) {
+  try {
+    const ss = getDB();
+    const sheet = ss.getSheetByName(SHEET_ISSUES);
+    sheet.appendRow([new Date(), issueData.userId, issueData.displayName, issueData.type, issueData.description, '待處理']);
+    return { success: true, message: '回報已收到' };
+  } catch(e) {
+    return { success: false, message: '回報失敗' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// SPREADSHEET TRIGGER (手動發貨功能)
+// ----------------------------------------------------------------------------
+
+function onEdit(e) {
+  const range = e.range;
+  const sheet = range.getSheet();
+  
+  if (sheet.getName() !== SHEET_ORDERS) return;
+  
+  if (range.getColumn() === 12 && e.value === 'TRUE') {
+    const row = range.getRow();
+    if (row === 1) return; 
+
+    processManualFulfillment(sheet, row);
+  }
+}
+
+function processManualFulfillment(orderSheet, rowIndex) {
+  const rowData = orderSheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  const productName = rowData[4];
+  const qtyNeeded = rowData[6] || 1;
+  const currentCode = rowData[7];
+
+  if (currentCode && currentCode.toString().trim() !== '') {
+    orderSheet.getRange(rowIndex, 12).uncheck();
+    SpreadsheetApp.getActive().toast(`訂單 ${rowData[0]} 已有卡號，無需補發`, '系統提示');
+    return;
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const invSheet = ss.getSheetByName(SHEET_INVENTORY);
+  const prodSheet = ss.getSheetByName(SHEET_PRODUCTS);
+
+  const prodData = prodSheet.getDataRange().getValues();
+  let productId = null;
+  for(let p=1; p<prodData.length; p++){
+    if(prodData[p][1] === productName) {
+      productId = prodData[p][0];
+      break;
+    }
+  }
+
+  if (!productId) {
+    SpreadsheetApp.getActive().toast('找不到對應商品ID', '錯誤');
+    orderSheet.getRange(rowIndex, 12).uncheck();
+    return;
+  }
+
+  const invData = invSheet.getDataRange().getValues();
+  let foundIndices = [];
+  let codes = [];
+  let passwords = [];
+
+  for (let i = 1; i < invData.length; i++) {
+    if (String(invData[i][0]) === String(productId) && String(invData[i][6]).toLowerCase() === 'available') {
+      foundIndices.push(i + 1);
+      codes.push(invData[i][3]);
+      passwords.push(invData[i][4]);
+      if (foundIndices.length === qtyNeeded) break;
+    }
+  }
+
+  if (foundIndices.length < qtyNeeded) {
+    SpreadsheetApp.getActive().toast(`庫存不足！需要 ${qtyNeeded}，僅剩 ${foundIndices.length}`, '發貨失敗');
+    orderSheet.getRange(rowIndex, 12).uncheck();
+    return;
+  }
+
+  foundIndices.forEach(idx => {
+    invSheet.getRange(idx, 7).setValue('Sold');
+  });
+
+  const finalCodes = codes.join('\n');
+  const finalPass = passwords.join('\n');
+  
+  orderSheet.getRange(rowIndex, 8).setValue(finalCodes);
+  orderSheet.getRange(rowIndex, 9).setValue(finalPass);
+  orderSheet.getRange(rowIndex, 10).setValue('Manual Filled'); 
+  
+  orderSheet.getRange(rowIndex, 12).uncheck();
+  
+  SpreadsheetApp.getActive().toast(`訂單 ${rowData[0]} 手動發貨成功！`, '成功');
+}

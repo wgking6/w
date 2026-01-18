@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>遊戲方程式 Game Equation</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LINE LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'wuxia-bg': '#180a0a',       // 深紅黑背景
+              'wuxia-card': '#2b1212',     // 卡片深木色
+              'wuxia-red': '#dc2626',      // 朱砂紅
+              'wuxia-red-dark': '#991b1b', // 深紅
+              'wuxia-gold': '#fbbf24',     // 亮金
+              'wuxia-gold-dark': '#b45309',// 暗金
+              'wuxia-text': '#fce7f3',     // 淺粉白文字
+              'wuxia-jade': '#10b981',     // 玉石綠
+            },
+            backgroundImage: {
+              'pattern-cloud': "url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjUxLCAxOTEsIDM2LCAwLjEpIi8+PC9zdmc+')",
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #180a0a;
+        background-image: radial-gradient(circle at 50% 0%, #451a1a 0%, #180a0a 70%);
+        color: #fce7f3;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #2b1212; }
+      ::-webkit-scrollbar-thumb { background: #78350f; border-radius: 4px; border: 1px solid #451a1a; }
+      ::-webkit-scrollbar-thumb:hover { background: #92400e; }
+      .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .text-glow { text-shadow: 0 0 10px rgba(251, 191, 36, 0.3); }
+      /* Ensure Modals are on top */
+      .z-modal { z-index: 60; }
+      /* SweetAlert Customization */
+      .swal2-popup { background: #2b1212 !important; border: 1px solid #fbbf24; color: #fce7f3 !important; }
+      .swal2-title { color: #fbbf24 !important; }
+      .swal2-confirm { background: linear-gradient(to right, #dc2626, #991b1b) !important; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Main Application Code -->
+    <script type="text/babel" data-presets="react">
+      // ==========================================
+      // 設定與全域變數
+      // ==========================================
+      const LIFF_ID = '2008912922-0bJiM0sT'; 
+      // 建構 LIFF URL
+      const LIFF_URL = `https://liff.line.me/${LIFF_ID}`;
+
+      const LOGO_URL = 'https://placehold.co/200x200/991b1b/fbbf24?text=Game'; 
+      const BANK_INFO = {
+        code: '823',
+        name: '將來銀行',
+        account: '88618888888836'
+      };
+      
+      const isGAS = typeof google !== 'undefined' && google.script;
+
+      // ==========================================
+      // 服務層 (Backend API)
+      // ==========================================
+      
+      const withTimeout = (promise, ms = 30000) => {
+          return Promise.race([
+              promise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error("請求逾時，請檢查網路或稍後再試")), ms))
+          ]);
+      };
+
+      const getProducts = () => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .getProducts();
+          } else {
+            console.log('Mock: getProducts');
+            setTimeout(() => {
+              resolve([
+                { id: 'pc-1', name: '新武林同萌傳輔助 - 30天月卡', description: '暢遊武林！30天尊榮會員', price: 150, imageUrl: 'https://i.ibb.co/WvYhdmc7/30.jpg', category: '電腦遊戲' },
+                { id: 'pc-2', name: '新武林同萌傳輔助 - 360天年卡', description: '年度超值方案！', price: 1050, imageUrl: 'https://i.ibb.co/Bvh6JKn/360.jpg', category: '電腦遊戲' },
+                { id: 'pc-3', name: '艾爾之光輔助 - 月卡', description: '每日領取K-Ching', price: 800, imageUrl: 'https://i.ibb.co/xKKmw5ZQ/image.jpg', category: '電腦遊戲' },
+                { id: 'mob-chaos', name: '卡厄思夢境輔助 - 月卡', description: '夢境冒險，每日領取鑽石', price: 250, imageUrl: 'https://i.ibb.co/F447LW0Z/image.jpg', category: '手機遊戲' },
+                { id: 'mob-ro', name: 'RO仙境傳說輔助 - 月卡', description: '月卡福利加倍', price: 250, imageUrl: 'https://i.ibb.co/sdddNjrb/RO.jpg', category: '手機遊戲' },
+                { id: 'mob-hot', name: '熱血江湖：福利加強版輔助 - 月卡', description: '熱血重燃，福利滿滿', price: 250, imageUrl: 'https://i.ibb.co/7tyRH2Hr/image.jpg', category: '手機遊戲' }
+              ]);
+            }, 800);
+          }
+        });
+      };
+
+      const getMyOrders = (userId) => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .getUserOrders(userId);
+          } else {
+             // Mock data update to test empty codes
+             resolve([
+               { orderId: 'MOCK-OLD', date: new Date().toISOString(), productName: '已發貨商品', price: 150, quantity: 1, codes: 'CODE-123', passwords: 'PASS-123' },
+               { orderId: 'MOCK-NEW', date: new Date().toISOString(), productName: '等待發貨中', price: 250, quantity: 1, codes: '', passwords: '' }
+             ]);
+          }
+        });
+      };
+
+      const logUserToBackend = (user) => {
+        if (isGAS) {
+          google.script.run.logUserAccess(user);
+        } else {
+          console.log('Mock: logUser', user);
+        }
+      };
+
+      const processCartOrderBackend = (user, paymentNote, cartItems) => {
+        const itemsForBackend = cartItems.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            name: item.product.name,
+            price: item.product.price
+        }));
+
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .processCartOrder(user, paymentNote, itemsForBackend);
+           } else {
+             setTimeout(() => {
+                const resultItems = cartItems.map(item => ({
+                   name: item.product.name,
+                   quantity: item.quantity,
+                   codes: '', // Mock: No codes immediately
+                   passwords: ''
+                }));
+                resolve({
+                   success: true,
+                   message: 'Mock Cart Success',
+                   orderId: 'MOCK-CART-' + Date.now(),
+                   items: resultItems
+                });
+             }, 1500);
+           }
+        });
+      };
+
+      const submitIssueReport = (data) => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .submitIssue(data);
+          } else {
+             setTimeout(() => resolve({ success: true, message: 'Mock report sent.' }), 1000);
+          }
+        });
+      };
+
+      // ==========================================
+      // Components
+      // ==========================================
+
+      const Navbar = ({ user, cartCount, onReport, onWallet, onOpenCart, onLogin }) => {
+        // 如果 user 是測試帳號(test-user)，顯示登入按鈕而不是單純顯示"訪客"
+        const isGuest = !user || user.userId === 'test-user';
+
+        return (
+          <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50">
+            <div className="container mx-auto px-4 h-20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative group cursor-pointer">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-wuxia-red to-wuxia-gold rounded-full opacity-60 group-hover:opacity-90 blur transition duration-500 animate-pulse"></div>
+                  <img src={LOGO_URL} alt="Logo" className="h-14 w-14 rounded-full relative bg-wuxia-bg object-cover border-2 border-wuxia-gold p-0.5" />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
+                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 1.0</span>
+                  </div>
+                  <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-4">
+                <button onClick={onOpenCart} className="relative p-2 text-wuxia-gold hover:text-white transition group mr-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-wuxia-red text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-wuxia-bg animate-bounce font-bold">{cartCount}</span>}
+                </button>
+                {!isGuest && (
+                   <button onClick={onWallet} className="flex items-center gap-1 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 border border-wuxia-gold/30 rounded text-wuxia-gold text-xs font-bold transition">
+                     <span className="text-lg">🎫</span><span className="hidden sm:inline">票券</span>
+                   </button>
+                )}
+                <button onClick={onReport} className="hidden sm:block px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">回報</button>
+                {!isGuest ? (
+                  <div className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card">
+                    <img src={user.pictureUrl || 'https://picsum.photos/100/100'} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-wuxia-gold/70 shadow-md" />
+                  </div>
+                ) : (
+                   <button 
+                     onClick={onLogin} 
+                     className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]"
+                   >
+                     <span className="font-bold">LINE 登入</span>
+                   </button>
+                )}
+              </div>
+            </div>
+          </nav>
+        );
+      };
+
+      const ProductCard = ({ product, onAdd }) => {
+        const isMobile = product.category === '手機遊戲';
+        return (
+          <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
+            <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
+              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+              <div className={`absolute top-2 right-2 backdrop-blur-md px-3 py-0.5 rounded text-xs font-bold border shadow-lg tracking-widest ${isMobile ? 'bg-purple-900/80 border-purple-500 text-purple-100' : 'bg-blue-900/80 border-blue-500 text-blue-100'}`}>{product.category}</div>
+            </div>
+            <div className="p-5 flex flex-col flex-grow relative">
+              <h3 className="text-lg font-bold text-wuxia-gold mb-2 leading-tight group-hover:text-white transition-colors">{product.name}</h3>
+              <p className="text-sm text-stone-400 mb-6 line-clamp-2 leading-relaxed font-serif tracking-wide">{product.description}</p>
+              <div className="mt-auto flex items-end justify-between gap-3 pt-4 border-t border-white/5">
+                <div className="flex flex-col"><span className="text-xs text-stone-500 font-mono mb-1">PRICE</span><span className="text-2xl font-mono text-white font-bold tracking-tight text-glow"><span className="text-base text-wuxia-gold mr-1">$</span>{product.price}</span></div>
+                <button onClick={() => onAdd(product)} className="relative overflow-hidden px-6 py-2 bg-gradient-to-b from-wuxia-red to-wuxia-red-dark text-white rounded transition-all duration-300 font-bold text-sm shadow-lg hover:shadow-wuxia-red/50 border border-wuxia-gold/50 hover:border-wuxia-gold group-btn">
+                  <span className="relative z-10 tracking-widest">加入行囊</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-btn-hover:animate-shine"></div>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const Modal = ({ isOpen, title, children, onClose }) => {
+        if (!isOpen) return null;
+        return (
+          <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+            <div className="relative bg-[#2b1212] border-2 border-wuxia-gold w-full max-w-md max-h-[90vh] flex flex-col rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn">
+              <div className="h-1 bg-gradient-to-r from-wuxia-gold-dark via-wuxia-gold to-wuxia-gold-dark shrink-0"></div>
+              <div className="px-6 py-4 border-b border-wuxia-gold/20 flex justify-between items-center bg-black/20 shrink-0">
+                <h3 className="text-xl font-bold text-wuxia-gold tracking-widest">{title}</h3>
+                <button onClick={onClose} className="text-stone-500 hover:text-wuxia-red transition"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </div>
+              <div className="p-6 bg-pattern-cloud overflow-y-auto custom-scrollbar">{children}</div>
+            </div>
+          </div>
+        );
+      };
+
+      const WalletModal = ({ isOpen, user, onClose, onLogin }) => {
+         const [orders, setOrders] = React.useState([]);
+         const [loading, setLoading] = React.useState(false);
+
+         React.useEffect(() => {
+            if(isOpen && user) {
+               // 確保是真實用戶才讀取
+               if (user.userId === 'test-user') return;
+
+               setLoading(true);
+               getMyOrders(user.userId)
+                  .then(data => { setOrders(data); setLoading(false); })
+                  .catch((err) => { 
+                     setLoading(false); 
+                     Swal.fire({
+                         icon: 'error', 
+                         title: '無法讀取票券', 
+                         text: '請確認網路狀態或稍後再試 (' + (err.message || 'Unknown') + ')',
+                         background: '#2b1212', 
+                         color: '#fff' 
+                     });
+                  });
+            }
+         }, [isOpen, user]);
+
+         return (
+            <Modal isOpen={isOpen} title="我的票券夾" onClose={onClose}>
+               {user && (
+                 <div className="mb-4 p-2 bg-white/5 rounded border border-white/10 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                       <img src={user.pictureUrl || 'https://placehold.co/100'} className="w-8 h-8 rounded-full border border-stone-600"/>
+                       <div>
+                          <p className="text-xs text-stone-400">目前帳號</p>
+                          <p className="text-sm font-bold text-wuxia-gold">{user.displayName}</p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">ID: {user.userId ? user.userId.substring(0,6)+'...' : 'Unknown'}</span>
+                    </div>
+                 </div>
+               )}
+               {user && user.userId === 'test-user' ? (
+                  <div className="text-center py-10">
+                     <p className="text-stone-500 mb-4">您目前處於訪客/離線模式，無法查看票券。</p>
+                     <button onClick={onLogin} className="px-6 py-2 bg-[#06C755] text-white rounded font-bold hover:bg-[#05b34c] transition shadow-lg">使用 LINE 登入</button>
+                  </div>
+               ) : loading ? <div className="text-center py-10 text-wuxia-gold animate-pulse">讀取中...</div> : orders.length === 0 ? <div className="text-center py-10 text-stone-500">尚無購買紀錄</div> : (
+                  <div className="space-y-4">
+                     {orders.map((order, idx) => (
+                        <div key={idx} className="bg-black/30 border border-wuxia-gold/30 rounded p-4">
+                           <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
+                              <div>
+                                <h4 className="text-white font-bold">{order.productName}</h4>
+                                <div className="flex gap-2 items-center mt-1">
+                                  <p className="text-xs text-stone-500">{new Date(order.date).toLocaleString()}</p>
+                                  {!order.codes && <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded animate-pulse">待發貨</span>}
+                                  {order.codes && <span className="text-[10px] bg-green-900/50 text-green-500 border border-green-700 px-1 rounded">已完成</span>}
+                                </div>
+                              </div>
+                              <div className="text-right"><span className="text-wuxia-gold font-mono block">${order.price}</span><span className="text-[10px] text-stone-400">x{order.quantity}</span></div>
+                           </div>
+                           {(!order.codes || order.codes === '') ? (
+                              <div className="text-center py-4 bg-stone-800/30 rounded border border-dashed border-stone-700 mt-2">
+                                <p className="text-wuxia-gold text-sm font-bold">客服確認中，請稍候</p>
+                                <p className="text-xs text-stone-500 mt-1">款項核對無誤後，系統將自動派發序號至此處</p>
+                              </div>
+                           ) : (
+                              <div className="space-y-2 mt-2">
+                                 <div className="bg-[#1a0f0f] p-2 rounded border border-wuxia-jade/20 relative group/code">
+                                   <div className="flex justify-between">
+                                      <p className="text-[10px] text-stone-500 uppercase">序號 / Codes</p>
+                                      <button onClick={() => { navigator.clipboard.writeText(order.codes); Swal.fire({toast:true, position:'top-end', icon:'success', title:'複製成功', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff'}); }} className="text-[10px] text-wuxia-jade underline">複製</button>
+                                   </div>
+                                   <pre className="text-wuxia-jade font-mono text-sm whitespace-pre-wrap select-all">{order.codes}</pre>
+                                 </div>
+                                 {order.passwords && order.passwords.trim() !== '' && (
+                                   <div className="bg-[#1a0f0f] p-2 rounded border border-wuxia-jade/20">
+                                      <p className="text-[10px] text-stone-500 uppercase">密碼 / Passwords</p>
+                                      <pre className="text-wuxia-jade font-mono text-sm whitespace-pre-wrap select-all">{order.passwords}</pre>
+                                   </div>
+                                 )}
+                              </div>
+                           )}
+                        </div>
+                     ))}
+                  </div>
+               )}
+            </Modal>
+         );
+      };
+
+      const ReportModal = ({ isOpen, user, onClose, onLogin }) => {
+        const [type, setType] = React.useState('充值問題');
+        const [desc, setDesc] = React.useState('');
+        const [status, setStatus] = React.useState('idle');
+
+        const handleSubmit = async () => {
+          if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', confirmButtonText: '登入', preConfirm: onLogin });
+          if (!desc.trim()) return Swal.fire({ icon: 'warning', title: '請填寫描述', text: '我們需要知道您的問題詳情', confirmButtonText: '好' });
+          setStatus('submitting');
+          try {
+            await submitIssueReport({ userId: user.userId, displayName: user.displayName, type, description: desc });
+            setStatus('success');
+            setTimeout(() => { onClose(); setStatus('idle'); setDesc(''); }, 2000);
+          } catch(e) {
+            Swal.fire({ icon: 'error', title: '發送失敗', text: '請稍後再試' });
+            setStatus('idle');
+          }
+        };
+
+        if (status === 'success') {
+          return (
+            <Modal isOpen={isOpen} title="回報成功" onClose={onClose}>
+               <div className="text-center py-8"><div className="text-wuxia-jade text-5xl mb-4">✓</div><p className="text-stone-300">您的飛鴿傳書已送達，<br/>小二將盡快為您處理！</p></div>
+            </Modal>
+          );
+        }
+        return (
+          <Modal isOpen={isOpen} title="問題回報" onClose={onClose}>
+            <div className="space-y-4">
+              <div><label className="block text-xs text-wuxia-gold mb-1">問題類型</label><select value={type} onChange={e => setType(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 focus:border-wuxia-gold outline-none"><option value="充值問題">充值問題</option><option value="序號無效">序號無效</option><option value="商品建議">商品建議</option><option value="其他">其他</option></select></div>
+              <div><label className="block text-xs text-wuxia-gold mb-1">詳細描述</label><textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} placeholder="請描述您遇到的狀況..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-stone-200 focus:border-wuxia-gold outline-none"></textarea></div>
+              <div className="pt-2"><button onClick={handleSubmit} disabled={status === 'submitting'} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold transition disabled:opacity-50">{status === 'submitting' ? '發送中...' : '提交回報'}</button></div>
+            </div>
+          </Modal>
+        );
+      }
+
+      // ==========================================
+      // App
+      // ==========================================
+      const App = () => {
+        const [products, setProducts] = React.useState([]);
+        const [user, setUser] = React.useState(null);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
+        
+        const [cart, setCart] = React.useState([]);
+        const [showCart, setShowCart] = React.useState(false);
+        const [cartTotal, setCartTotal] = React.useState(0);
+
+        const [tempProduct, setTempProduct] = React.useState(null);
+        const [tempQty, setTempQty] = React.useState(1);
+
+        const [showBankInfo, setShowBankInfo] = React.useState(false); 
+        const [paymentNote, setPaymentNote] = React.useState(''); 
+        
+        const [showReport, setShowReport] = React.useState(false);
+        const [showWallet, setShowWallet] = React.useState(false);
+        const [isProcessing, setIsProcessing] = React.useState(false);
+        const [activeCategory, setActiveCategory] = React.useState('全部');
+
+        React.useEffect(() => {
+           setCartTotal(cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0));
+        }, [cart]);
+
+        // 核心修正：強制跳轉到 LIFF URL 進行登入
+        // 使用 window.top.location.href 強制跳出 GAS iframe
+        const loginWithLiffUrl = () => {
+             console.log("Redirecting to LIFF URL for authentication...");
+             window.top.location.href = LIFF_URL;
+        };
+
+        const initLiff = React.useCallback(async () => {
+          console.log("開始初始化 LIFF...");
+          try {
+             if (!window.liff) throw new Error("LIFF SDK 未載入");
+
+             // 嘗試初始化
+             await window.liff.init({ liffId: LIFF_ID });
+             
+             // 如果是在外部瀏覽器且未登入，且沒有在 iframe 中，嘗試自動登入 (慎用)
+             // 但因為我們是在 GAS iframe 中，所以這裡主要依賴 isLoggIn()
+             
+             if (window.liff.isLoggedIn()) {
+                console.log("LIFF 已登入");
+                const profile = await window.liff.getProfile();
+                const userData = { 
+                   userId: profile.userId, 
+                   displayName: profile.displayName, 
+                   pictureUrl: profile.pictureUrl, 
+                   os: window.liff.getOS() 
+                };
+                setUser(userData);
+                logUserToBackend(userData);
+             } else {
+                console.log("LIFF 未登入，等待用戶手動點擊登入按鈕...");
+                // 這裡我們不再自動執行 window.liff.login()，因為在 GAS iframe 內容易失敗或無限迴圈。
+                // 相反，我們將使用者保留在「訪客模式」，並讓 UI 顯示「LINE 登入」按鈕。
+                setUser({ userId: 'test-user', displayName: '訪客', pictureUrl: '', os: 'web' });
+             }
+          } catch (err) {
+            console.error('LIFF 初始化失敗:', err);
+            // 發生錯誤切換到離線測試模式
+            setUser({ userId: 'test-user', displayName: '離線測試員', pictureUrl: '', os: 'web' });
+            
+            let errorMsg = 'LINE 連線異常 (' + err.message + ')';
+            if (err.message && err.message.includes("channel not found")) {
+                errorMsg = 'LIFF ID 設定錯誤 (Channel Not Found)，請確認 ID 正確。';
+            }
+            setError(errorMsg);
+          }
+        }, []);
+
+        const fetchProducts = React.useCallback(async () => {
+          setLoading(true);
+          try {
+            const data = await getProducts();
+            setProducts(data);
+          } catch (err) {
+            setError('無法讀取商品列表');
+          } finally {
+            setLoading(false);
+          }
+        }, []);
+
+        React.useEffect(() => { initLiff(); fetchProducts(); }, [initLiff, fetchProducts]);
+
+        const filteredProducts = React.useMemo(() => {
+          if (activeCategory === '全部') return products;
+          return products.filter(p => p.category === activeCategory);
+        }, [products, activeCategory]);
+
+        const categories = ['全部', '電腦遊戲', '手機遊戲'];
+
+        const openAddToCart = (product) => { setTempProduct(product); setTempQty(1); };
+
+        const confirmAddToCart = () => {
+           if (!tempProduct) return;
+           setCart(prev => {
+              const existing = prev.find(item => item.product.id === tempProduct.id);
+              if (existing) {
+                 return prev.map(item => item.product.id === tempProduct.id ? { ...item, quantity: item.quantity + tempQty } : item);
+              }
+              return [...prev, { product: tempProduct, quantity: tempQty }];
+           });
+           setTempProduct(null);
+           Swal.fire({
+             toast: true,
+             position: 'top-end',
+             icon: 'success',
+             title: '已加入行囊',
+             showConfirmButton: false,
+             timer: 1500,
+             background: '#2b1212',
+             color: '#fff'
+           });
+        };
+
+        const removeFromCart = (productId) => { setCart(prev => prev.filter(item => item.product.id !== productId)); };
+        
+        const updateCartQuantity = (productId, delta) => {
+           setCart(prev => prev.map(item => {
+              if (item.product.id === productId) {
+                 const newQty = Math.max(1, item.quantity + delta);
+                 return { ...item, quantity: newQty };
+              }
+              return item;
+           }));
+        };
+
+        const proceedToCheckout = () => {
+           if (cart.length === 0) return;
+           if (!user || user.userId === 'test-user') {
+              Swal.fire({ 
+                  icon: 'info', 
+                  title: '請先登入', 
+                  text: '登入 LINE 帳號以進行購買', 
+                  showCancelButton: true,
+                  confirmButtonText: 'LINE 登入',
+                  cancelButtonText: '取消',
+                  confirmButtonColor: '#06C755'
+              }).then((result) => {
+                  if (result.isConfirmed) {
+                      loginWithLiffUrl();
+                  }
+              });
+              return;
+           }
+           setShowCart(false);
+           setShowBankInfo(true);
+        };
+
+        const executeCartPurchase = async (e) => {
+           if(e) e.preventDefault();
+           if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', text: '無法使用訪客帳號購買', confirmButtonText: '好' });
+           if (!paymentNote.trim()) return Swal.fire({ icon: 'warning', title: '請輸入資料', text: '請輸入轉帳帳號後五碼以供對帳', confirmButtonText: '好' });
+
+           setIsProcessing(true);
+           try {
+             const result = await withTimeout(
+                processCartOrderBackend({ userId: user.userId, displayName: user.displayName }, paymentNote, cart),
+                30000 
+             );
+             
+             if (result.success) {
+               if (window.liff && window.liff.isInClient()) {
+                 const itemListStr = cart.map(item => `- ${item.product.name} x${item.quantity}`).join('\n');
+                 try {
+                   await window.liff.sendMessages([{
+                     type: 'text',
+                     text: `【訂單已提交】\n總金額：$${cartTotal}\n帳號後五碼：${paymentNote}\n訂單編號：${result.orderId}\n\n購買明細：\n${itemListStr}\n\n客服人員將盡快核對款項並發貨，請至「我的票券」查看。`
+                   }]);
+                 } catch (msgErr) { console.error("Line Msg Error:", msgErr); }
+               }
+
+               setCart([]); 
+               setShowBankInfo(false);
+               setPaymentNote('');
+               
+               Swal.fire({
+                 icon: 'success',
+                 title: '訂單已提交',
+                 html: '<p class="text-stone-300">小二已收到您的訂單！<br/>確認款項後將立即為您將寶物放入票券夾。</p>',
+                 confirmButtonText: '好的，我去票券夾看看',
+                 customClass: { popup: 'border-2 border-wuxia-gold' }
+               }).then((result) => {
+                  if (result.isConfirmed) {
+                    setShowWallet(true);
+                  }
+               });
+
+             } else {
+               Swal.fire({ icon: 'error', title: '購買失敗', text: result.message, confirmButtonText: '關閉' });
+             }
+           } catch (err) {
+             console.error("Execution Error:", err);
+             Swal.fire({ icon: 'error', title: '交易發生錯誤', text: err.message, confirmButtonText: '關閉' });
+           } finally {
+             setIsProcessing(false);
+           }
+        };
+
+        const copyToClipboard = (text) => {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+               Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '帳號已複製', showConfirmButton: false, timer: 1500, background: '#2b1212', color: '#fff' });
+            }).catch(() => {});
+          } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try { 
+               document.execCommand('copy'); 
+               Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '帳號已複製', showConfirmButton: false, timer: 1500, background: '#2b1212', color: '#fff' });
+            } catch (err) {}
+            document.body.removeChild(textArea);
+          }
+        };
+
+        return (
+          <div className="min-h-screen pb-20">
+            <Navbar user={user} cartCount={cart.reduce((a,b)=>a+b.quantity, 0)} onReport={() => setShowReport(true)} onWallet={() => { if(!user || user.userId === 'test-user') return Swal.fire({icon:'info', title:'請先登入', showCancelButton:true, confirmButtonText:'LINE 登入', cancelButtonText:'取消'}).then(r => { if(r.isConfirmed) loginWithLiffUrl(); }); setShowWallet(true); }} onOpenCart={() => setShowCart(true)} onLogin={loginWithLiffUrl} />
+
+            <main className="container mx-auto px-4 pt-24">
+              <div className="mb-12 text-center relative">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-wuxia-red/20 blur-[80px] rounded-full -z-10 animate-pulse"></div>
+                <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight"><span className="text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-100 to-wuxia-gold drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">遊戲方程式</span><span className="block text-xl mt-3 font-normal text-red-300 font-serif tracking-widest">虛寶補給站</span></h1>
+                <div className="sm:hidden mt-4 flex justify-center gap-4">{user && user.userId !== 'test-user' && <button onClick={() => setShowWallet(true)} className="text-xs text-wuxia-gold underline">我的票券夾</button>}<button onClick={() => setShowReport(true)} className="text-xs text-wuxia-red underline">遇到問題？</button></div>
+              </div>
+
+              <div className="flex justify-center mb-10 gap-4">
+                {categories.map(cat => (
+                  <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-6 py-2 rounded border transition-all duration-300 font-bold text-sm tracking-wider transform ${activeCategory === cat ? 'bg-wuxia-red text-white border-wuxia-red shadow-[0_0_15px_rgba(220,38,38,0.5)] scale-110' : 'bg-transparent text-stone-500 border-stone-700 hover:border-stone-400 hover:text-stone-300'}`}>{cat}</button>
+                ))}
+              </div>
+
+              {error && <div className="bg-red-900/30 border border-red-800 text-red-300 p-4 rounded-lg text-center mb-6 whitespace-pre-wrap">{error}</div>}
+
+              {loading ? (
+                <div className="flex justify-center items-center h-64 flex-col gap-4"><div className="animate-spin rounded-full h-12 w-12 border-4 border-wuxia-card border-t-wuxia-gold"></div><p className="text-wuxia-gold text-sm tracking-widest animate-pulse">正在讀取卷軸...</p></div>
+              ) : (
+                <>
+                  {filteredProducts.length === 0 ? <div className="text-center py-20 text-stone-600 border-2 border-dashed border-stone-800 rounded-lg">此分類目前沒有寶物</div> : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">{filteredProducts.map((product) => (<ProductCard key={product.id} product={product} onAdd={openAddToCart} />))}</div>
+                  )}
+                </>
+              )}
+            </main>
+
+            <Modal isOpen={!!tempProduct} title="加入行囊" onClose={() => setTempProduct(null)}>
+                {tempProduct && (
+                  <div className="text-center space-y-4">
+                    <div className="w-full h-32 rounded border border-wuxia-gold/30 overflow-hidden mb-4 relative bg-black"><img src={tempProduct.imageUrl} alt={tempProduct.name} className="w-full h-full object-cover opacity-80" /></div>
+                    <h3 className="text-xl font-bold text-white tracking-wide">{tempProduct.name}</h3>
+                    <div className="flex items-center justify-center gap-4 my-4">
+                        <button onClick={() => setTempQty(Math.max(1, tempQty - 1))} className="w-8 h-8 rounded bg-stone-700 text-white font-bold hover:bg-wuxia-red transition">-</button>
+                        <span className="text-xl font-mono font-bold text-wuxia-gold w-8">{tempQty}</span>
+                        <button onClick={() => setTempQty(Math.min(10, tempQty + 1))} className="w-8 h-8 rounded bg-stone-700 text-white font-bold hover:bg-wuxia-red transition">+</button>
+                    </div>
+                    <div className="bg-black/40 px-6 py-2 rounded-full border border-wuxia-gold/30 inline-block"><p className="text-stone-400 text-xs">小計</p><p className="text-2xl text-wuxia-gold font-mono font-bold">${tempProduct.price * tempQty}</p></div>
+                    <div className="flex gap-4 mt-8">
+                      <button onClick={() => setTempProduct(null)} className="flex-1 px-4 py-3 rounded border border-stone-600 text-stone-400 hover:bg-stone-800 transition text-sm">取消</button>
+                      <button onClick={confirmAddToCart} className="flex-1 px-4 py-3 rounded bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white font-bold transition flex justify-center items-center shadow-lg hover:shadow-wuxia-red/30 border border-wuxia-gold/30">確認加入</button>
+                    </div>
+                  </div>
+                )}
+            </Modal>
+
+            <Modal isOpen={showCart} title="我的行囊 (購物車)" onClose={() => setShowCart(false)}>
+               {cart.length === 0 ? <div className="text-center py-10 text-stone-500">行囊空空如也，快去選購寶物吧！</div> : (
+                  <div className="space-y-4">
+                     {cart.map((item, idx) => (
+                        <div key={idx} className="bg-black/30 p-3 rounded border border-stone-800 flex flex-col gap-3">
+                           <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-3">
+                                 <img src={item.product.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-600"/>
+                                 <div className="flex-1">
+                                    <p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p>
+                                    <p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p>
+                                 </div>
+                              </div>
+                              <button onClick={() => removeFromCart(item.product.id)} className="text-stone-500 hover:text-red-500 p-1">
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                           </div>
+                           <div className="flex justify-between items-center pl-[60px]">
+                              <div className="flex items-center bg-stone-900 border border-stone-700 rounded h-8">
+                                 <button onClick={() => updateCartQuantity(item.product.id, -1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-l transition">-</button>
+                                 <span className="w-10 text-center text-wuxia-gold font-mono font-bold text-sm border-x border-stone-700">{item.quantity}</span>
+                                 <button onClick={() => updateCartQuantity(item.product.id, 1)} className="w-8 h-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-700 rounded-r transition">+</button>
+                              </div>
+                              <span className="text-wuxia-gold font-mono font-bold text-lg">${item.product.price * item.quantity}</span>
+                           </div>
+                        </div>
+                     ))}
+                     <div className="border-t border-white/10 pt-4 mt-4 flex justify-between items-end"><span className="text-stone-400">總金額</span><span className="text-3xl text-wuxia-gold font-mono font-bold">${cartTotal}</span></div>
+                     <button onClick={proceedToCheckout} className="w-full mt-4 py-3 bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white rounded font-bold shadow-lg hover:shadow-wuxia-red/30 transition">前往結帳</button>
+                  </div>
+               )}
+            </Modal>
+
+             <Modal isOpen={showBankInfo} title="結帳資訊" onClose={() => setShowBankInfo(false)}>
+                  <div className="space-y-6">
+                    <p className="text-stone-300 text-sm text-center">請匯款 <span className="text-wuxia-gold font-bold">${cartTotal}</span> 至以下帳戶：</p>
+                    <div className="bg-gradient-to-br from-stone-900 to-black p-5 rounded-lg border border-wuxia-gold/50 relative overflow-hidden shadow-inner">
+                        <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl text-white font-serif italic font-bold select-none">Bank</div>
+                        <div className="relative z-10 space-y-3">
+                            <div className="flex justify-between items-end border-b border-white/10 pb-2"><span className="text-stone-400 text-xs">銀行代碼</span><span className="text-xl font-mono text-white font-bold">{BANK_INFO.code}</span></div>
+                            <div className="flex justify-between items-end border-b border-white/10 pb-2"><span className="text-stone-400 text-xs">銀行名稱</span><span className="text-lg text-white font-bold">{BANK_INFO.name}</span></div>
+                            <div className="pt-1"><span className="text-stone-400 text-xs block mb-1">匯款帳號</span><div className="flex items-center justify-between bg-black/50 p-2 rounded border border-wuxia-gold/20"><span className="text-2xl font-mono text-wuxia-gold tracking-widest">{BANK_INFO.account}</span><button onClick={() => copyToClipboard(BANK_INFO.account)} className="ml-2 px-3 py-1 bg-stone-700 hover:bg-wuxia-gold hover:text-black text-xs text-white rounded transition">複製</button></div></div>
+                        </div>
+                    </div>
+                    <div className="space-y-3 pt-2"><label className="block text-sm text-wuxia-gold font-bold">付款通知</label><input type="text" placeholder="請輸入您的匯款帳號後五碼" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-stone-600 rounded p-3 text-white focus:border-wuxia-gold outline-none text-center font-mono tracking-widest text-lg placeholder:text-stone-600 placeholder:text-sm" maxLength={5} /></div>
+                    <div className="flex gap-4 mt-4">
+                       <button onClick={() => setShowBankInfo(false)} className="px-4 py-3 rounded border border-stone-600 text-stone-400 hover:bg-stone-800 transition text-sm">返回</button>
+                       <button type="button" onClick={executeCartPurchase} disabled={isProcessing} className={`flex-1 px-4 py-3 rounded bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white font-bold transition flex justify-center items-center shadow-lg hover:shadow-wuxia-red/30 border border-wuxia-gold/30 ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}>{isProcessing ? '驗證中...' : '已匯款，提交訂單'}</button>
+                    </div>
+                    {/* 新增回報問題按鈕 */}
+                    <div className="mt-6 border-t border-white/10 pt-4">
+                       <div className="bg-wuxia-card p-3 rounded border border-wuxia-red/30 flex justify-between items-center">
+                          <span className="text-sm text-stone-300">遇到問題？</span>
+                          <button 
+                             onClick={() => { setShowBankInfo(false); setShowReport(true); }} 
+                             className="px-3 py-1 bg-wuxia-red/20 text-wuxia-red border border-wuxia-red rounded hover:bg-wuxia-red hover:text-white transition text-sm"
+                          >
+                             回報問題
+                          </button>
+                       </div>
+                    </div>
+                  </div>
+            </Modal>
+
+            <ReportModal isOpen={showReport} user={user} onClose={() => setShowReport(false)} onLogin={loginWithLiffUrl} />
+            <WalletModal isOpen={showWallet} user={user} onClose={() => setShowWallet(false)} onLogin={loginWithLiffUrl} />
+          </div>
+        );
+      };
+
+      const rootElement = document.getElementById('root');
+      if (rootElement) {
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<React.StrictMode><App /></React.StrictMode>);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "name": "遊戲方程式-自動發卡網站",
+  "description": "A powerful code analysis and refactoring assistant. Import your code files or paste snippets to explain, debug, refactor, or convert languages using the latest Google Gemini models.",
+  "requestFramePermissions": []
+}
