@@ -290,7 +290,7 @@
       };
 
       const ProductCard = ({ product, onAdd }) => {
-        const isMobile = product.category === '手機遊戲';
+        const isMobile = (product.category || '').trim() === '手機遊戲';
         return (
           <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
             <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
@@ -549,7 +549,8 @@
 
         const filteredProducts = React.useMemo(() => {
           if (activeCategory === '全部') return products;
-          return products.filter(p => p.category === activeCategory);
+          // 關鍵修正：確保篩選時去除空白
+          return products.filter(p => (p.category || '').trim() === activeCategory);
         }, [products, activeCategory]);
 
         const categories = ['全部', '電腦遊戲', '手機遊戲'];

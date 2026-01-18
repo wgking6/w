@@ -48,10 +48,7 @@ function ensureSheet(ss, sheetName, headers) {
         sheet.appendRow(['pc-1', '月卡', '新武林同萌傳', `CODE-TEST-${i}`, `PASS-${i}`, '2025-12-31', 'Available']);
       }
     }
-    if (sheetName === SHEET_ORDERS) {
-       const range = sheet.getRange("L2:L1000");
-       range.insertCheckboxes();
-    }
+    // 移除：不再預先插入 L2:L1000 的核取方塊，避免佔用列數導致 appendRow 寫入到千行之後
   }
   return sheet;
 }
@@ -109,8 +106,6 @@ function handleApiPost(e) {
     if (e.postData && e.postData.contents) {
        data = JSON.parse(e.postData.contents);
     } else if (e.parameter) {
-       // 如果是 x-www-form-urlencoded，嘗試從參數讀取
-       // 這裡假設如果沒有 contents，資料可能在 parameter 裡 (少見但防呆)
        data = e.parameter;
     }
   } catch (err) {
@@ -162,16 +157,35 @@ function getProducts() {
     const row = data[i];
     if (row[0]) {
       products.push({
-        id: row[0],
-        name: row[1],
-        description: row[2],
+        id: String(row[0]).trim(),
+        name: String(row[1]).trim(),
+        description: String(row[2]),
         price: Number(row[3]),
-        imageUrl: row[4],
-        category: row[5]
+        imageUrl: String(row[4]).trim(),
+        category: String(row[5] || '').trim() 
       });
     }
   }
   return products;
+}
+
+/**
+ * 輔助函數：尋找下一個真正的空白列（忽略僅有核取方塊的列）
+ */
+function getNextRealEmptyRow(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 2;
+  
+  // 讀取 A 欄 (訂單編號) 來判斷真正的最後一筆資料在哪
+  // 這樣即使 L 欄有核取方塊，我們也能找到正確的寫入點
+  const range = sheet.getRange(1, 1, lastRow, 1).getValues();
+  
+  for (let i = range.length - 1; i >= 0; i--) {
+    if (range[i][0] && String(range[i][0]).trim() !== "") {
+      return i + 2; // 資料在 index i (row i+1)，所以下一列是 i+2
+    }
+  }
+  return 2; // 如果整欄都空，從第 2 列開始
 }
 
 /**
@@ -191,9 +205,11 @@ function processCartOrder(userObj, paymentNote, cartItems) {
     const orderId = 'ORD-' + Date.now();
     let resultItems = []; 
 
+    // 使用智慧偵測找到正確的寫入列
+    let nextRow = getNextRealEmptyRow(orderSheet);
+
     for (let item of cartItems) {
-      // 寫入訂單表，但卡號/密碼留空
-      orderSheet.appendRow([
+      const rowData = [
         orderId,
         new Date(),
         userObj.userId,
@@ -201,15 +217,18 @@ function processCartOrder(userObj, paymentNote, cartItems) {
         item.name,
         Number(item.price) * Number(item.quantity),
         item.quantity,
-        '', // Code 留空 (等待客服發貨)
+        '', // Code 留空
         '', // Password 留空
-        'Pending', // 狀態改為待處理
+        'Pending', 
         String(paymentNote || ''),
-        false // 手動發貨 Checkbox (預設不打勾)
-      ]);
+        false // 手動發貨 Checkbox
+      ];
 
-      // 幫 Checkbox 加最後一欄
-      orderSheet.getRange(orderSheet.getLastRow(), 12).insertCheckboxes();
+      // 使用 setValues 指定寫入特定列，而非 appendRow
+      orderSheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
+      
+      // 確保該列有核取方塊
+      orderSheet.getRange(nextRow, 12).insertCheckboxes();
 
       resultItems.push({
         name: item.name,
@@ -217,6 +236,8 @@ function processCartOrder(userObj, paymentNote, cartItems) {
         codes: '', 
         passwords: ''
       });
+      
+      nextRow++; // 下一筆商品往下寫
     }
 
     return {
@@ -244,7 +265,8 @@ function getUserOrders(userId) {
   const myOrders = [];
   // 從第2列開始 (跳過標題)
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][2]) === String(userId)) {
+    // 檢查欄位是否存在，避免讀取到空白列報錯
+    if (data[i] && String(data[i][2]) === String(userId)) {
       let dateStr = "";
       try {
          dateStr = data[i][1] instanceof Date ? data[i][1].toISOString() : String(data[i][1]);
