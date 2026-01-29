@@ -402,61 +402,78 @@
       };
 
       const Navbar = ({ user, cartCount, unreadCount, onReport, onSuggest, onWallet, onProfile, onOpenCart, onLogin }) => {
-        const isGuest = !user || user.userId === 'test-user';
-        return (
-          <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50 h-20">
-            <div className="container mx-auto px-4 h-full flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative group cursor-pointer">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-wuxia-red to-wuxia-gold rounded-full opacity-60 group-hover:opacity-90 blur transition duration-500 animate-pulse"></div>
-                  <img src={LOGO_URL} alt="Logo" className="h-14 w-14 rounded-full relative bg-wuxia-bg object-cover border-2 border-wuxia-gold p-0.5" />
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.1</span>
-                  </div>
-                  <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:gap-4">
-                <button onClick={onOpenCart} className="relative p-2 text-wuxia-gold hover:text-white transition group mr-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-wuxia-red text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-wuxia-bg animate-bounce font-bold">{cartCount}</span>}
-                </button>
-                {!isGuest && (
-                   <>
-                     <button onClick={onWallet} className="relative p-2 text-wuxia-gold hover:text-white transition mr-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-wuxia-bg animate-pulse font-bold">{unreadCount}</span>}
-                     </button>
-                     <button onClick={onWallet} className="flex items-center gap-1 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 border border-wuxia-gold/30 rounded text-wuxia-gold text-xs font-bold transition">
-                        <span className="text-lg">🎫</span><span className="hidden sm:inline">票券</span>
-                     </button>
-                   </>
-                )}
-                <div className="hidden sm:flex items-center gap-2">
-                  <button onClick={onReport} className="px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">回報</button>
-                  <button onClick={onSuggest} className="px-3 py-1 text-xs border border-blue-500/50 text-blue-400 hover:bg-blue-600 hover:text-white transition rounded">功能建議</button>
-                </div>
-                {!isGuest ? (
-                  <button onClick={onProfile} className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card hover:brightness-110 transition">
-                    <img src={user.pictureUrl || 'https://picsum.photos/100/100'} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-wuxia-gold/70 shadow-md" />
-                  </button>
-                ) : (
-                   <button onClick={onLogin} className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]">
-                     <span className="font-bold">LINE 登入</span>
-                   </button>
-                )}
-              </div>
+  const isGuest = !user || user.userId === 'test-user';
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50 h-20">
+      <div className="container mx-auto px-4 h-full flex items-center justify-between">
+        {/* Logo 區域 */}
+        <div className="flex items-center gap-3">
+          <div className="relative group cursor-pointer">
+            <div className="absolute -inset-1 bg-gradient-to-r from-wuxia-red to-wuxia-gold rounded-full opacity-60 group-hover:opacity-90 blur transition duration-500 animate-pulse"></div>
+            <img src={LOGO_URL} alt="Logo" className="h-14 w-14 rounded-full relative bg-wuxia-bg object-cover border-2 border-wuxia-gold p-0.5" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
+              <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.6</span>
             </div>
-          </nav>
-        );
-      };
+            <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
+          </div>
+        </div>
+        
+        {/* 右側操作區 */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* 購物車 */}
+          <button onClick={onOpenCart} className="relative p-2 text-wuxia-gold hover:text-white transition group mr-1">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-wuxia-red text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-wuxia-bg animate-bounce font-bold">
+                {cartCount}
+              </span>
+            )}
+          </button>
+          
+          {/* ★ 修正: 僅在登入狀態顯示票券夾按鈕 */}
+          {!isGuest && (
+            <button onClick={onWallet} className="relative p-2 text-wuxia-gold hover:text-white transition mr-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-wuxia-bg animate-pulse font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          )}
+          
+          {/* 桌面版: 回報與建議按鈕 */}
+          <div className="hidden sm:flex items-center gap-2">
+            <button onClick={onReport} className="px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">
+              回報
+            </button>
+            <button onClick={onSuggest} className="px-3 py-1 text-xs border border-blue-500/50 text-blue-400 hover:bg-blue-600 hover:text-white transition rounded">
+              功能建議
+            </button>
+          </div>
+          
+          {/* 用戶頭像 / 登入按鈕 */}
+          {!isGuest ? (
+            <button onClick={onProfile} className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card hover:brightness-110 transition">
+              <img src={user.pictureUrl || 'https://picsum.photos/100/100'} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-wuxia-gold/70 shadow-md" />
+            </button>
+          ) : (
+            <button onClick={onLogin} className="flex items-center gap-2 px-3 py-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded font-bold text-xs transition border border-[#05b34c] shadow-[0_0_10px_rgba(6,199,85,0.4)]">
+              <span className="font-bold">LINE 登入</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+};
 
       const ProductCard = ({ product, onAdd }) => {
         const category = (product.category || '').trim();
@@ -748,7 +765,7 @@
         );
       };
 
-      const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin, onCancelOrder, onReportPayment, products, onBuyAgain }) => {
+     const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin, onCancelOrder, onReportPayment, products, onBuyAgain }) => {
    const [orders, setOrders] = React.useState([]);
    const [loading, setLoading] = React.useState(false);
    const isAdmin = user && user.userId === ADMIN_ID;
@@ -761,12 +778,18 @@
             .then(data => { setOrders(data); setLoading(false); })
             .catch((err) => { 
                setLoading(false); 
-               Swal.fire({ icon: 'error', title: '無法讀取票券', text: err.message, background: '#2b1212', color: '#fff' });
+               Swal.fire({ 
+                  icon: 'error', 
+                  title: '無法讀取票券', 
+                  text: err.message, 
+                  background: '#2b1212', 
+                  color: '#fff' 
+               });
             });
       }
    }, [isOpen, user]);
    
-   // ★ 新增: 歸檔處理函數
+   // 歸檔處理函數
    const handleArchiveOrder = async (orderId) => {
       try {
          const result = await fetch(`${GAS_API_URL}?action=archiveOrder&orderId=${orderId}`)
@@ -783,7 +806,7 @@
                background: '#2b1212',
                color: '#fff'
             });
-            // 重新載入票券夾
+            // 重新載入訂單
             getMyOrders(user.userId).then(data => setOrders(data));
          }
       } catch(e) {
@@ -793,6 +816,7 @@
    
    return (
       <Modal isOpen={isOpen} title="我的票券夾" onClose={onClose}>
+         {/* 用戶資訊區 */}
          {user && (
            <div className="mb-4 p-2 bg-white/5 rounded border border-white/10 flex justify-between items-center">
               <div className="flex items-center gap-2">
@@ -817,6 +841,7 @@
            </div>
          )}
          
+         {/* 訪客模式提示 */}
          {user && user.userId === 'test-user' ? (
             <div className="text-center py-10">
                <p className="text-stone-500 mb-4">您目前處於訪客模式，無法查看票券。</p>
@@ -882,10 +907,16 @@
                           <p className="text-wuxia-gold text-sm font-bold">等待入帳確認中</p>
                           <p className="text-xs text-stone-500 mt-1 mb-3">若已匯款請點擊回報，系統核對後自動發卡</p>
                           <div className="flex justify-center gap-2">
-                              <button onClick={() => onReportPayment(order.orderId, order.price)} className="px-3 py-1 bg-wuxia-gold text-black text-xs font-bold rounded hover:bg-white transition">
+                              <button 
+                                 onClick={() => onReportPayment(order.orderId, order.price)} 
+                                 className="px-3 py-1 bg-wuxia-gold text-black text-xs font-bold rounded hover:bg-white transition"
+                              >
                                  匯款回報
                               </button>
-                              <button onClick={() => onCancelOrder(order.orderId)} className="px-3 py-1 border border-stone-600 text-stone-400 text-xs rounded hover:bg-stone-800 transition">
+                              <button 
+                                 onClick={() => onCancelOrder(order.orderId)} 
+                                 className="px-3 py-1 border border-stone-600 text-stone-400 text-xs rounded hover:bg-stone-800 transition"
+                              >
                                  取消訂單
                               </button>
                           </div>
@@ -899,7 +930,7 @@
                         </div>
                      )}
                      
-                     {/* ★ 改進: 已發貨狀態 - 優化卡密顯示 */}
+                     {/* ★ 修正: 已發貨狀態 - 每行顯示 "卡號 / 卡密" */}
                      {order.status === '已發貨' && (
                         <div className="space-y-2 mt-2">
                            <div className="bg-[#1a0f0f] p-3 rounded border border-wuxia-jade/20 relative">
@@ -927,7 +958,7 @@
                                        📋 複製全部
                                     </button>
                                     
-                                    {/* ★ 新增: 歸檔按鈕 */}
+                                    {/* 歸檔按鈕 */}
                                     {!order.isArchived && (
                                        <button 
                                           onClick={() => handleArchiveOrder(order.orderId)} 
@@ -939,17 +970,17 @@
                                  </div>
                               </div>
                               
-                              {/* ★ 改進: 卡密顯示區 - 支援每行一組格式 */}
-                              <div className="bg-black/50 p-2 rounded">
+                              {/* ★ 修正: 卡密顯示區 - 格式為 "卡號 / 卡密" */}
+                              <div className="bg-black/50 p-3 rounded">
                                  <pre className="text-wuxia-jade font-mono text-xs whitespace-pre-wrap select-all leading-relaxed">
-                                    {order.codes}
+{order.codes}
                                  </pre>
                               </div>
                               
                               {/* 說明文字 */}
                               {order.passwords && order.passwords.includes('已整合') && (
-                                 <p className="text-[9px] text-stone-600 mt-1 text-center">
-                                    {order.passwords}
+                                 <p className="text-[9px] text-stone-600 mt-1 text-center italic">
+                                    💡 {order.passwords}
                                  </p>
                               )}
                               
