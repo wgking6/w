@@ -74,7 +74,18 @@
       .swal2-title { color: #fbbf24 !important; }
       .swal2-confirm { background: linear-gradient(to right, #dc2626, #991b1b) !important; }
     </style>
-  </head>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+</head>
   <body>
     <div id="root"></div>
 
@@ -85,9 +96,8 @@
       // ==========================================
       const LIFF_ID = '2008912922-0bJiM0sT'; 
       const LIFF_URL = `https://liff.line.me/${LIFF_ID}`;
-      // 如果是在 GAS 環境，這裡會自動被 google.script.run 替換，這裡只是 fallback
-      const GAS_API_URL = ''; 
-      const ADMIN_ID = 'Ua66fd77f72e4524075afd856cae91587'; 
+      const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxo-_jcz9ApUTS6ENUAKYmg5ggT3h8AGAoulKlMZu4uSh-hx5yCC2qOr6XLLhedjKBsew/exec';
+      const ADMIN_ID = 'Ua66fd77f72e4524075afd856cae91587'; // ★ Admin LINE ID
 
       const LOGO_URL = 'https://placehold.co/200x200/991b1b/fbbf24?text=Game'; 
       const BANK_INFO = {
@@ -109,40 +119,93 @@
           ]);
       };
 
-      // Helper for Promisifying google.script.run
-      const runGAS = (funcName, ...args) => {
+      const getProducts = () => {
         return new Promise((resolve, reject) => {
-          if (!isGAS) {
-             console.log(`[Mock GAS] Call ${funcName}`, args);
-             // Simple Mocks for offline testing
-             if(funcName === 'getProducts') return resolve([
-                { id: 'pc-1', name: '新武林同萌傳輔助 - 30天月卡', description: '暢遊武林！30天尊榮會員', price: 150, imageUrl: 'https://placehold.co/400x300/2b1212/fbbf24?text=WuLin', category: '電腦遊戲' },
-                { id: 'pc-2', name: '新武林同萌傳輔助 - 360天年卡', description: '年度超值方案！', price: 1050, imageUrl: 'https://placehold.co/400x300/991b1b/ffffff?text=WuLin+Year', category: '電腦遊戲' },
-                { id: 'mob-chaos', name: '卡厄思夢境輔助 - 月卡', description: '夢境冒險，每日領取鑽石', price: 250, imageUrl: 'https://placehold.co/400x300/4a044e/e879f9?text=Chaos', category: '手機遊戲' }
-             ]);
-             if(funcName === 'getUserOrders') return resolve([]);
-             if(funcName === 'handleAdminAction') return resolve({ 
-                success: true, 
-                orders: [{ rowIndex: 2, orderId: 'ORD-TEST', date: '2023-10-27', userName: 'TestUser', productName: 'Mock Product', price: 150, paymentNote: '12345' }], 
-                inventory: [], 
-                products: [{ id: 'pc-1', name: 'Mock Product' }], 
-                users: [] 
-             });
-             return resolve({success:true}); 
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .getProducts();
+          } else {
+            fetch(`${GAS_API_URL}?action=getProducts`)
+              .then(res => res.json())
+              .then(data => {
+                 if (data.error) reject(new Error(data.error));
+                 else resolve(data);
+              })
+              .catch(err => reject(err));
           }
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(err => reject(new Error(err.message || err)))
-            [funcName](...args);
         });
       };
 
-      const getProducts = () => runGAS('getProducts');
-      const getMyOrders = (userId) => runGAS('getUserOrders', userId);
-      const getMemberProfileBackend = (userId) => runGAS('getMemberProfile', userId);
-      const updateMemberProfileBackend = (data) => runGAS('updateMemberProfile', data);
-      const logUserToBackend = (user) => { if(isGAS) google.script.run.logUserAccess(user); };
-      
+      const getMyOrders = (userId) => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .getUserOrders(userId);
+          } else {
+             fetch(`${GAS_API_URL}?action=getUserOrders&userId=${userId}`)
+              .then(res => res.json())
+              .then(data => {
+                 if (data.error) reject(new Error(data.error));
+                 else resolve(data);
+              })
+              .catch(err => reject(err));
+          }
+        });
+      };
+
+      const getMemberProfileBackend = (userId) => {
+         return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .getMemberProfile(userId);
+           } else {
+             fetch(`${GAS_API_URL}?action=getMemberProfile&userId=${userId}`)
+               .then(res => res.json())
+               .then(resolve).catch(reject);
+           }
+         });
+      };
+
+      const updateMemberProfileBackend = (data) => {
+         return new Promise((resolve, reject) => {
+            if (isGAS) {
+               google.script.run
+                 .withSuccessHandler(resolve)
+                 .withFailureHandler((err) => reject(new Error(err.message || err)))
+                 .updateMemberProfile(data);
+            } else {
+               fetch(GAS_API_URL, {
+                 method: 'POST',
+                 redirect: 'follow',
+                 headers: { "Content-Type": "text/plain;charset=utf-8" },
+                 body: JSON.stringify({ action: 'updateMemberProfile', ...data })
+               })
+               .then(res => res.json())
+               .then(data => { if(data.success) resolve(data); else reject(new Error(data.message)); })
+               .catch(reject);
+            }
+         });
+      };
+
+      const logUserToBackend = (user) => {
+        if (isGAS) {
+          google.script.run.logUserAccess(user);
+        } else {
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            mode: 'no-cors', 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'logUserAccess', data: user })
+          }).catch(console.error);
+        }
+      };
+
       const processCartOrderBackend = (user, paymentNote, cartItems) => {
         const itemsForBackend = cartItems.map(item => ({
             productId: item.product.id,
@@ -150,16 +213,146 @@
             name: item.product.name,
             price: item.product.price
         }));
-        return runGAS('processCartOrder', user, paymentNote, itemsForBackend);
+
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .processCartOrder(user, paymentNote, itemsForBackend);
+           } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                   action: 'processCartOrder', 
+                   user: user, 
+                   paymentNote: paymentNote, 
+                   cartItems: itemsForBackend 
+                })
+             })
+             .then(async res => {
+                const text = await res.text();
+                try { return JSON.parse(text); } catch (e) { throw new Error("伺服器回應異常，可能是版本未更新。"); }
+             })
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Order failed'));
+             })
+             .catch(reject);
+           }
+        });
       };
 
-      const updateOrderPaymentBackend = (userId, orderId, paymentNote) => runGAS('updateOrderPayment', userId, orderId, paymentNote);
-      const cancelOrderBackend = (userId, orderId) => runGAS('cancelOrder', userId, orderId);
-      const archiveMyOrder = (orderId) => runGAS('archiveOrder', orderId);
-      const submitIssueReport = (data) => runGAS('submitIssue', data);
+      const updateOrderPaymentBackend = (userId, orderId, paymentNote) => {
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .updateOrderPayment(userId, orderId, paymentNote);
+           } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                   action: 'updateOrderPayment', 
+                   userId: userId, 
+                   orderId: orderId,
+                   paymentNote: paymentNote
+                })
+             })
+             .then(async res => {
+                const text = await res.text();
+                try { return JSON.parse(text); } catch (e) { throw new Error("伺服器回應異常"); }
+             })
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Update failed'));
+             })
+             .catch(reject);
+           }
+        });
+      };
+
+      const cancelOrderBackend = (userId, orderId) => {
+        return new Promise((resolve, reject) => {
+           if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler((err) => reject(new Error(err.message || err)))
+               .cancelOrder(userId, orderId);
+           } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow', 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ 
+                   action: 'cancelOrder', 
+                   userId: userId, 
+                   orderId: orderId
+                })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Cancel failed'));
+             })
+             .catch(reject);
+           }
+        });
+      };
+
+      const submitIssueReport = (data) => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err.message || err)))
+              .submitIssue(data);
+          } else {
+             fetch(GAS_API_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: 'submitIssue', data: data })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Report failed'));
+             })
+             .catch(reject);
+          }
+        });
+      };
       
-      // Admin API
-      const callAdminApi = (subAction, payload) => runGAS('handleAdminAction', { adminId: ADMIN_ID, subAction, payload });
+      // === Admin API ===
+      const callAdminApi = (subAction, payload) => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+             google.script.run
+               .withSuccessHandler(resolve)
+               .withFailureHandler(err => reject(new Error(err.message || err)))
+               .handleAdminAction({ adminId: ADMIN_ID, subAction, payload });
+          } else {
+             fetch(GAS_API_URL, {
+               method: 'POST',
+               redirect: 'follow',
+               headers: { "Content-Type": "text/plain;charset=utf-8" },
+               body: JSON.stringify({ action: 'adminAction', adminId: ADMIN_ID, subAction, payload })
+             })
+             .then(res => res.json())
+             .then(data => {
+                if (data.success) resolve(data);
+                else reject(new Error(data.message || 'Admin Action Failed'));
+             })
+             .catch(reject);
+          }
+        });
+      };
 
       // ==========================================
       // Components
@@ -221,7 +414,7 @@
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.5</span>
+                    <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.1</span>
                   </div>
                   <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
                 </div>
@@ -277,12 +470,7 @@
         return (
           <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
             <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
-              <img 
-                src={product.imageUrl} 
-                alt={product.name} 
-                onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" 
-              />
+              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
               <div className={`absolute top-2 right-2 backdrop-blur-md px-3 py-0.5 rounded text-xs font-bold border shadow-lg tracking-widest ${tagClass}`}>{product.category}</div>
             </div>
             <div className="p-5 flex flex-col flex-grow relative">
@@ -317,10 +505,114 @@
         );
       };
 
-      // ==========================================
-      // Modals (Admin, Wallet, etc.)
-      // ==========================================
+      const ProfileModal = ({ isOpen, user, onClose }) => {
+         const [loading, setLoading] = React.useState(false);
+         const [formData, setFormData] = React.useState({ phone: '', email: '', gender: '' });
 
+         React.useEffect(() => {
+           if(isOpen && user) {
+             setLoading(true);
+             getMemberProfileBackend(user.userId)
+               .then(data => { if(data.success) setFormData({ phone: data.phone, email: data.email, gender: data.gender || '不透露' }); })
+               .finally(() => setLoading(false));
+           }
+         }, [isOpen, user]);
+
+         const handleSave = () => {
+            setLoading(true);
+            updateMemberProfileBackend({ 
+               userId: user.userId, 
+               displayName: user.displayName, 
+               phone: formData.phone, 
+               email: formData.email, 
+               gender: formData.gender 
+            }).then(() => {
+               Swal.fire({ toast:true, position:'top-end', icon:'success', title:'資料已更新', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
+               onClose();
+            }).catch(e => Swal.fire('Error', e.message, 'error'))
+              .finally(() => setLoading(false));
+         };
+
+         return (
+            <Modal isOpen={isOpen} title="會員資料卡" onClose={onClose}>
+               <div className="flex flex-col items-center mb-6">
+                  <img src={user?.pictureUrl || 'https://placehold.co/100'} className="w-20 h-20 rounded-full border-2 border-wuxia-gold shadow-lg mb-2" />
+                  <h3 className="text-lg font-bold text-white">{user?.displayName}</h3>
+                  <p className="text-xs text-stone-500">{user?.userId}</p>
+               </div>
+               {loading ? <div className="text-center py-4 text-wuxia-gold animate-pulse">讀取中...</div> : (
+                  <div className="space-y-4">
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">聯絡電話</label>
+                        <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" placeholder="09xx-xxx-xxx" />
+                     </div>
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">電子信箱</label>
+                        <input type="email" value={formData.email} onChange={e => setFormData({...formData, email:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" placeholder="example@gmail.com" />
+                     </div>
+                     <div>
+                        <label className="block text-xs text-wuxia-gold mb-1">性別</label>
+                        <select value={formData.gender} onChange={e => setFormData({...formData, gender:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white">
+                           <option value="男">男</option>
+                           <option value="女">女</option>
+                           <option value="不透露">不透露</option>
+                        </select>
+                     </div>
+                     <button onClick={handleSave} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold mt-4 shadow-lg">儲存變更</button>
+                  </div>
+               )}
+            </Modal>
+         );
+      };
+      
+      const GuideModal = ({ isOpen, onClose }) => {
+        const [dontShow, setDontShow] = React.useState(false);
+        
+        const handleClose = () => {
+            if (dontShow) {
+                try { localStorage.setItem('game_equation_hide_guide_v2', 'true'); } catch(e){}
+            }
+            onClose();
+        };
+
+        if (!isOpen) return null;
+        return (
+           <Modal isOpen={isOpen} title="📜 新手入門指引" onClose={handleClose}>
+             <div className="space-y-6">
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">1</div>
+                   <div><h4 className="text-wuxia-gold font-bold">挑選寶物</h4><p className="text-stone-400 text-sm">瀏覽商品列表，選擇您需要的遊戲輔助或虛寶，點擊「加入行囊」。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">2</div>
+                   <div><h4 className="text-wuxia-gold font-bold">確認行囊</h4><p className="text-stone-400 text-sm">點擊右上角購物車圖示，確認數量無誤後，點擊「提交訂單」。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">3</div>
+                   <div><h4 className="text-wuxia-gold font-bold">傳送通知</h4><p className="text-stone-400 text-sm">系統會自動引導您開啟 LINE，請送出預設訊息以建立訂單紀錄。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">4</div>
+                   <div><h4 className="text-wuxia-gold font-bold">付款回報</h4><p className="text-stone-400 text-sm">畫面將顯示匯款帳號。轉帳後，請務必輸入您的「帳號後五碼」並送出。</p></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">5</div>
+                   <div><h4 className="text-wuxia-gold font-bold">自動發貨</h4><p className="text-stone-400 text-sm">系統確認入帳後(約5分鐘)，請至「票券夾」領取您的卡號與密碼。</p></div>
+                </div>
+                
+                <div className="pt-2">
+                    <div className="flex items-center gap-2 mb-3 justify-center">
+                        <input type="checkbox" id="no-guide" checked={dontShow} onChange={e => setDontShow(e.target.checked)} className="w-4 h-4 accent-wuxia-red cursor-pointer" />
+                        <label htmlFor="no-guide" className="text-stone-400 text-sm cursor-pointer select-none">下次不再顯示此訊息</label>
+                    </div>
+                    <button onClick={handleClose} className="w-full py-3 bg-gradient-to-r from-wuxia-gold-dark to-wuxia-gold text-black font-bold rounded shadow-lg hover:brightness-110 transition">我已瞭解，開始冒險！</button>
+                </div>
+             </div>
+           </Modal>
+        );
+      };
+
+      // Admin Modal
       const AdminModal = ({ isOpen, onClose }) => {
         const [activeTab, setActiveTab] = React.useState('orders');
         const [data, setData] = React.useState(null);
@@ -389,9 +681,10 @@
              
              {data && (
                <>
+                 {/* 訂單管理 TAB */}
                  {activeTab === 'orders' && (
                    <div className="space-y-4">
-                      {(!data.orders || data.orders.length === 0) ? <p className="text-center text-stone-500">目前沒有待處理訂單。</p> : 
+                      {data.orders.length === 0 ? <p className="text-center text-stone-500">目前沒有待處理訂單。</p> : 
                         data.orders.map((ord, i) => (
                            <div key={i} className="bg-black/30 p-3 rounded border border-wuxia-gold/20 flex justify-between items-center">
                               <div>
@@ -406,6 +699,7 @@
                    </div>
                  )}
                  
+                 {/* 庫存管理 TAB */}
                  {activeTab === 'inventory' && (
                    <div>
                       <div className="bg-stone-900 p-4 rounded mb-6 border border-stone-700">
@@ -413,7 +707,7 @@
                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                             <select value={invProdId} onChange={e => setInvProdId(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs">
                                <option value="">-- 選擇商品 --</option>
-                               {data.products && data.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                               {data.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                             <input type="text" placeholder="卡號 / Code" value={invCode} onChange={e => setInvCode(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs" />
                             <input type="text" placeholder="密碼 / Password (選填)" value={invPass} onChange={e => setInvPass(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs" />
@@ -421,7 +715,7 @@
                          </div>
                       </div>
                       <div className="space-y-2 h-64 overflow-y-auto pr-2">
-                         {data.inventory && data.inventory.map((inv, i) => (
+                         {data.inventory.map((inv, i) => (
                             <div key={i} className="flex justify-between items-center bg-black/20 p-2 rounded border border-stone-800">
                                <div className="overflow-hidden">
                                   <p className="text-stone-300 text-xs font-bold truncate">{inv.productName}</p>
@@ -437,9 +731,10 @@
                    </div>
                  )}
 
+                 {/* 用戶列表 TAB */}
                  {activeTab === 'users' && (
                    <div className="space-y-2">
-                      {data.users && data.users.map((u, i) => (
+                      {data.users.map((u, i) => (
                          <div key={i} className="flex justify-between p-2 border-b border-stone-800">
                             <div><p className="text-sm text-stone-200">{u.name}</p><p className="text-[10px] text-stone-500">{u.uid}</p></div>
                             <span className="text-xs text-stone-600">{u.date}</span>
@@ -453,225 +748,268 @@
         );
       };
 
-      const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin }) => {
-         const [orders, setOrders] = React.useState([]);
-         const [loading, setLoading] = React.useState(false);
-         const [activeTab, setActiveTab] = React.useState('unused'); // 'unused' | 'history'
-         const isAdmin = user && user.userId === ADMIN_ID;
-
-         const fetchOrders = () => {
-            if(user && user.userId !== 'test-user') {
-               setLoading(true);
-               getMyOrders(user.userId)
-                  .then(data => { setOrders(data); setLoading(false); })
-                  .catch((err) => { setLoading(false); });
-            }
-         };
-
-         React.useEffect(() => {
-            if(isOpen) fetchOrders();
-         }, [isOpen, user]);
-
-         const handleArchive = async (orderId) => {
+      const WalletModal = ({ isOpen, user, onClose, onLogin, onOpenAdmin, onCancelOrder, onReportPayment, products, onBuyAgain }) => {
+   const [orders, setOrders] = React.useState([]);
+   const [loading, setLoading] = React.useState(false);
+   const isAdmin = user && user.userId === ADMIN_ID;
+   
+   React.useEffect(() => {
+      if(isOpen && user) {
+         if (user.userId === 'test-user') return;
+         setLoading(true);
+         getMyOrders(user.userId)
+            .then(data => { setOrders(data); setLoading(false); })
+            .catch((err) => { 
+               setLoading(false); 
+               Swal.fire({ icon: 'error', title: '無法讀取票券', text: err.message, background: '#2b1212', color: '#fff' });
+            });
+      }
+   }, [isOpen, user]);
+   
+   // ★ 新增: 歸檔處理函數
+   const handleArchiveOrder = async (orderId) => {
+      try {
+         const result = await fetch(`${GAS_API_URL}?action=archiveOrder&orderId=${orderId}`)
+            .then(res => res.json());
+         
+         if(result.success) {
             Swal.fire({
-               title: '確認已使用？',
-               text: "將此訂單移至「歷史紀錄」分頁",
-               icon: 'question',
-               showCancelButton: true,
-               confirmButtonColor: '#10b981',
-               confirmButtonText: '是的，我已儲值',
-               cancelButtonText: '取消',
-               background: '#2b1212', color: '#fff'
-            }).then(async (result) => {
-               if (result.isConfirmed) {
-                  const res = await archiveMyOrder(orderId);
-                  if(res.success) {
-                     fetchOrders();
-                     Swal.fire({toast:true, position:'top-end', icon:'success', title:'已封存', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff'});
-                  } else {
-                     Swal.fire({icon:'error', title:'操作失敗', text:'請稍後再試'});
-                  }
-               }
+               toast: true,
+               position: 'top-end',
+               icon: 'success',
+               title: '已標記為完成儲值',
+               timer: 1500,
+               showConfirmButton: false,
+               background: '#2b1212',
+               color: '#fff'
             });
-         };
-
-         const filteredOrders = React.useMemo(() => {
-            if (activeTab === 'unused') return orders.filter(o => !o.isArchived);
-            return orders.filter(o => o.isArchived);
-         }, [orders, activeTab]);
-
-         const renderCodePairs = (codesStr, passesStr) => {
-            if (!codesStr) return null;
-            const cList = codesStr.split('\n');
-            const pList = passesStr ? passesStr.split('\n') : [];
-            
-            return cList.map((code, idx) => {
-               const pass = pList[idx] || '';
-               const copyText = pass ? `卡號：${code}\n卡密：${pass}` : code;
-               return (
-                  <div key={idx} className="bg-[#1a0f0f] p-3 rounded border border-wuxia-jade/20 mb-2 relative group/item">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm font-mono text-wuxia-jade">
-                          <span className="flex-1 whitespace-pre-wrap break-all"><span className="text-stone-500 select-none">卡號</span> {code}</span>
-                          {pass && <span className="flex-1 whitespace-pre-wrap break-all border-l border-white/10 pl-2 sm:pl-2"><span className="text-stone-500 select-none">卡密</span> {pass}</span>}
-                      </div>
-                      <button 
-                        onClick={() => { 
-                           navigator.clipboard.writeText(copyText); 
-                           Swal.fire({toast:true, position:'top-end', icon:'success', title:'複製成功', timer:1000, showConfirmButton:false, background:'#2b1212', color:'#fff'}); 
-                        }} 
-                        className="absolute top-2 right-2 text-[10px] bg-wuxia-jade/10 text-wuxia-jade px-2 py-0.5 rounded border border-wuxia-jade/30 hover:bg-wuxia-jade hover:text-black transition"
-                      >
-                        複製
-                      </button>
-                  </div>
-               );
-            });
-         };
-
-         return (
-            <Modal isOpen={isOpen} title="我的票券夾" onClose={onClose}>
-               {user && (
-                 <div className="mb-4 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                       <img src={user.pictureUrl || 'https://placehold.co/100'} className="w-8 h-8 rounded-full border border-stone-600"/>
-                       <span className="text-sm font-bold text-wuxia-gold">{user.displayName}</span>
-                    </div>
-                    <div className="flex gap-2">
-                       {isAdmin && (
-                         <button onClick={onOpenAdmin} className="text-xs bg-red-900/80 hover:bg-red-700 text-red-200 border border-red-500 px-2 py-1 rounded animate-pulse font-bold">
-                           進入掌門密室
-                         </button>
-                       )}
-                       <div className="flex bg-black/40 rounded p-1 gap-1">
-                          <button onClick={()=>setActiveTab('unused')} className={`px-3 py-1 text-xs rounded transition ${activeTab==='unused'?'bg-wuxia-gold text-black font-bold':'text-stone-400 hover:text-white'}`}>未使用</button>
-                          <button onClick={()=>setActiveTab('history')} className={`px-3 py-1 text-xs rounded transition ${activeTab==='history'?'bg-stone-700 text-white font-bold':'text-stone-400 hover:text-white'}`}>歷史紀錄</button>
-                       </div>
-                    </div>
+            // 重新載入票券夾
+            getMyOrders(user.userId).then(data => setOrders(data));
+         }
+      } catch(e) {
+         Swal.fire('錯誤', e.message, 'error');
+      }
+   };
+   
+   return (
+      <Modal isOpen={isOpen} title="我的票券夾" onClose={onClose}>
+         {user && (
+           <div className="mb-4 p-2 bg-white/5 rounded border border-white/10 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                 <img src={user.pictureUrl || 'https://placehold.co/100'} className="w-8 h-8 rounded-full border border-stone-600"/>
+                 <div>
+                    <p className="text-xs text-stone-400">目前帳號</p>
+                    <p className="text-sm font-bold text-wuxia-gold">{user.displayName}</p>
                  </div>
-               )}
-               
-               {user && user.userId === 'test-user' ? (
-                  <div className="text-center py-10">
-                     <p className="text-stone-500 mb-4">您目前處於訪客/離線模式，無法查看票券。</p>
-                     <button onClick={onLogin} className="px-6 py-2 bg-[#06C755] text-white rounded font-bold hover:bg-[#05b34c] transition shadow-lg">使用 LINE 登入</button>
-                  </div>
-               ) : loading ? <div className="text-center py-10 text-wuxia-gold animate-pulse">讀取中...</div> : filteredOrders.length === 0 ? <div className="text-center py-10 text-stone-500">此區無票券</div> : (
-                  <div className="space-y-4">
-                     {filteredOrders.map((order, idx) => (
-                        <div key={idx} className={`bg-black/30 border rounded p-4 ${activeTab==='history' ? 'border-stone-800 opacity-60' : 'border-wuxia-gold/30'}`}>
-                           <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
-                              <div>
-                                <h4 className="text-white font-bold">{order.productName}</h4>
-                                <div className="flex gap-2 items-center mt-1">
-                                  <p className="text-xs text-stone-500">{new Date(order.date).toLocaleString()}</p>
-                                  {!order.codes && <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded animate-pulse">待發貨</span>}
-                                  {order.codes && activeTab === 'unused' && <span className="text-[10px] bg-green-900/50 text-green-500 border border-green-700 px-1 rounded">可用</span>}
-                                  {activeTab === 'history' && <span className="text-[10px] bg-stone-800 text-stone-400 border border-stone-600 px-1 rounded">已封存</span>}
-                                </div>
-                              </div>
-                              <div className="text-right"><span className="text-wuxia-gold font-mono block">${order.price}</span><span className="text-[10px] text-stone-400">x{order.quantity}</span></div>
-                           </div>
-                           
-                           {(!order.codes || order.codes === '') ? (
-                              <div className="text-center py-4 bg-stone-800/30 rounded border border-dashed border-stone-700 mt-2">
-                                <p className="text-wuxia-gold text-sm font-bold">客服確認中，請稍候</p>
-                              </div>
-                           ) : (
-                              <div className="space-y-2 mt-2">
-                                 {renderCodePairs(order.codes, order.passwords)}
-                                 {activeTab === 'unused' && (
-                                    <div className="mt-3 text-right">
-                                       <button onClick={() => handleArchive(order.orderId)} className="text-xs border border-stone-600 text-stone-400 hover:text-white hover:border-white px-3 py-1 rounded transition">標記為已使用 (封存)</button>
-                                    </div>
-                                 )}
-                              </div>
-                           )}
+              </div>
+              <div className="flex gap-2">
+                 {isAdmin && (
+                   <button onClick={onOpenAdmin} className="text-xs bg-red-900/80 hover:bg-red-700 text-red-200 border border-red-500 px-2 py-1 rounded animate-pulse font-bold">
+                     進入掌門密室
+                   </button>
+                 )}
+                 <div className="text-right">
+                    <span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">
+                       ID: {user.userId ? user.userId.substring(0,6)+'...' : 'Unknown'}
+                    </span>
+                 </div>
+              </div>
+           </div>
+         )}
+         
+         {user && user.userId === 'test-user' ? (
+            <div className="text-center py-10">
+               <p className="text-stone-500 mb-4">您目前處於訪客模式，無法查看票券。</p>
+               <button onClick={onLogin} className="px-6 py-2 bg-[#06C755] text-white rounded font-bold hover:bg-[#05b34c] transition shadow-lg">
+                  使用 LINE 登入
+               </button>
+            </div>
+         ) : loading ? (
+            <div className="text-center py-10 text-wuxia-gold animate-pulse">讀取中...</div>
+         ) : orders.length === 0 ? (
+            <div className="text-center py-10 text-stone-500">尚無購買紀錄</div>
+         ) : (
+            <div className="space-y-4">
+               {orders.map((order, idx) => {
+                  const currentProduct = products ? products.find(p => p.name === order.productName) : null;
+                  const orderDate = new Date(order.date);
+                  const expiryDate = new Date(orderDate.getTime() + 30 * 60000).getTime();
+                  const isPending = order.status === '待處理';
+                  const isExpired = isPending && Date.now() > expiryDate;
+                  
+                  return (
+                  <div key={idx} className={`bg-black/30 border rounded p-4 ${isExpired ? 'border-red-900/50 opacity-75' : 'border-wuxia-gold/30'}`}>
+                     {/* 訂單標題區 */}
+                     <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
+                        <div>
+                          <h4 className="text-white font-bold">{order.productName}</h4>
+                          <div className="flex gap-2 items-center mt-1">
+                            <p className="text-xs text-stone-500">{orderDate.toLocaleString()}</p>
+                            {isPending && !isExpired && (
+                               <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded animate-pulse">
+                                  待處理
+                               </span>
+                            )}
+                            {order.status === '已發貨' && !order.isArchived && (
+                               <span className="text-[10px] bg-green-900/50 text-green-500 border border-green-700 px-1 rounded">
+                                  已完成
+                               </span>
+                            )}
+                            {order.isArchived && (
+                               <span className="text-[10px] bg-blue-900/50 text-blue-400 border border-blue-700 px-1 rounded">
+                                  ✓ 已儲值
+                               </span>
+                            )}
+                            {(order.status === '已取消' || isExpired) && (
+                               <span className="text-[10px] bg-stone-700 text-stone-400 border border-stone-600 px-1 rounded">
+                                  已取消/失效
+                               </span>
+                            )}
+                          </div>
                         </div>
-                     ))}
+                        <div className="text-right">
+                           <span className="text-wuxia-gold font-mono block">${order.price}</span>
+                           <span className="text-[10px] text-stone-400">x{order.quantity}</span>
+                        </div>
+                     </div>
+                     
+                     {/* 待處理狀態 */}
+                     {isPending && !isExpired && (
+                        <div className="text-center py-4 bg-stone-800/30 rounded border border-dashed border-stone-700 mt-2">
+                          <div className="flex justify-center mb-2">
+                             <CountdownTimer targetDate={expiryDate} onExpire={() => setOrders([...orders])} />
+                          </div>
+                          <p className="text-wuxia-gold text-sm font-bold">等待入帳確認中</p>
+                          <p className="text-xs text-stone-500 mt-1 mb-3">若已匯款請點擊回報，系統核對後自動發卡</p>
+                          <div className="flex justify-center gap-2">
+                              <button onClick={() => onReportPayment(order.orderId, order.price)} className="px-3 py-1 bg-wuxia-gold text-black text-xs font-bold rounded hover:bg-white transition">
+                                 匯款回報
+                              </button>
+                              <button onClick={() => onCancelOrder(order.orderId)} className="px-3 py-1 border border-stone-600 text-stone-400 text-xs rounded hover:bg-stone-800 transition">
+                                 取消訂單
+                              </button>
+                          </div>
+                        </div>
+                     )}
+                     
+                     {/* 已過期狀態 */}
+                     {isExpired && (
+                        <div className="text-center py-2 text-xs text-red-400 bg-red-900/10 rounded mt-2 border border-red-900/30">
+                           ⛔️ 此訂單已超過付款期限失效，請重新購買。
+                        </div>
+                     )}
+                     
+                     {/* ★ 改進: 已發貨狀態 - 優化卡密顯示 */}
+                     {order.status === '已發貨' && (
+                        <div className="space-y-2 mt-2">
+                           <div className="bg-[#1a0f0f] p-3 rounded border border-wuxia-jade/20 relative">
+                              {/* 標題與操作按鈕 */}
+                              <div className="flex justify-between items-center mb-2">
+                                 <p className="text-[11px] text-stone-500 uppercase">🎫 您的卡密</p>
+                                 <div className="flex gap-2">
+                                    {/* 複製按鈕 */}
+                                    <button 
+                                       onClick={() => { 
+                                          navigator.clipboard.writeText(order.codes); 
+                                          Swal.fire({
+                                             toast:true, 
+                                             position:'top-end', 
+                                             icon:'success', 
+                                             title:'已複製全部卡密', 
+                                             timer:1500, 
+                                             showConfirmButton:false,
+                                             background:'#2b1212',
+                                             color:'#fff'
+                                          }); 
+                                       }} 
+                                       className="text-[10px] bg-wuxia-jade/20 hover:bg-wuxia-jade/30 text-wuxia-jade px-2 py-1 rounded transition"
+                                    >
+                                       📋 複製全部
+                                    </button>
+                                    
+                                    {/* ★ 新增: 歸檔按鈕 */}
+                                    {!order.isArchived && (
+                                       <button 
+                                          onClick={() => handleArchiveOrder(order.orderId)} 
+                                          className="text-[10px] bg-blue-900/20 hover:bg-blue-900/30 text-blue-400 px-2 py-1 rounded transition"
+                                       >
+                                          ✓ 已完成儲值
+                                       </button>
+                                    )}
+                                 </div>
+                              </div>
+                              
+                              {/* ★ 改進: 卡密顯示區 - 支援每行一組格式 */}
+                              <div className="bg-black/50 p-2 rounded">
+                                 <pre className="text-wuxia-jade font-mono text-xs whitespace-pre-wrap select-all leading-relaxed">
+                                    {order.codes}
+                                 </pre>
+                              </div>
+                              
+                              {/* 說明文字 */}
+                              {order.passwords && order.passwords.includes('已整合') && (
+                                 <p className="text-[9px] text-stone-600 mt-1 text-center">
+                                    {order.passwords}
+                                 </p>
+                              )}
+                              
+                              {/* 歸檔狀態顯示 */}
+                              {order.isArchived && (
+                                 <div className="mt-2 text-center">
+                                    <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded border border-green-700">
+                                       ✓ 已完成儲值
+                                    </span>
+                                 </div>
+                              )}
+                           </div>
+                        </div>
+                     )}
+                     
+                     {/* 再次購買按鈕 */}
+                     <div className="mt-3 pt-2 border-t border-white/5 flex justify-end">
+                        {currentProduct ? (
+                          <button 
+                             onClick={() => { onClose(); onBuyAgain(currentProduct); }} 
+                             className="flex items-center gap-1 text-xs bg-wuxia-gold/10 hover:bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-3 py-1.5 rounded transition"
+                          >
+                             🛒 再次購買
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-stone-600 border border-stone-800 px-2 py-1 rounded">
+                             商品已下架
+                          </span>
+                        )}
+                     </div>
                   </div>
-               )}
-            </Modal>
-         );
-      };
-
-      const ProfileModal = ({ isOpen, user, onClose }) => {
-         const [loading, setLoading] = React.useState(false);
-         const [formData, setFormData] = React.useState({ phone: '', email: '', gender: '' });
-
-         React.useEffect(() => {
-           if(isOpen && user) {
-             setLoading(true);
-             getMemberProfileBackend(user.userId)
-               .then(data => { if(data.success) setFormData({ phone: data.phone, email: data.email, gender: data.gender || '不透露' }); })
-               .finally(() => setLoading(false));
-           }
-         }, [isOpen, user]);
-
-         const handleSave = () => {
-            setLoading(true);
-            updateMemberProfileBackend({ userId: user.userId, displayName: user.displayName, ...formData })
-            .then(() => {
-               Swal.fire({ toast:true, position:'top-end', icon:'success', title:'資料已更新', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
-               onClose();
-            }).finally(() => setLoading(false));
-         };
-
-         return (
-            <Modal isOpen={isOpen} title="會員資料卡" onClose={onClose}>
-               <div className="flex flex-col items-center mb-6">
-                  <img src={user?.pictureUrl || 'https://placehold.co/100'} className="w-20 h-20 rounded-full border-2 border-wuxia-gold shadow-lg mb-2" />
-                  <h3 className="text-lg font-bold text-white">{user?.displayName}</h3>
-                  <p className="text-xs text-stone-500">{user?.userId}</p>
-               </div>
-               {loading ? <div className="text-center py-4 text-wuxia-gold animate-pulse">讀取中...</div> : (
-                  <div className="space-y-4">
-                     <div><label className="block text-xs text-wuxia-gold mb-1">聯絡電話</label><input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" /></div>
-                     <div><label className="block text-xs text-wuxia-gold mb-1">電子信箱</label><input type="email" value={formData.email} onChange={e => setFormData({...formData, email:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white" /></div>
-                     <div><label className="block text-xs text-wuxia-gold mb-1">性別</label><select value={formData.gender} onChange={e => setFormData({...formData, gender:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white"><option value="男">男</option><option value="女">女</option><option value="不透露">不透露</option></select></div>
-                     <button onClick={handleSave} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold mt-4 shadow-lg">儲存變更</button>
-                  </div>
-               )}
-            </Modal>
-         );
-      };
-
-      const GuideModal = ({ isOpen, onClose }) => {
-        const [dontShow, setDontShow] = React.useState(false);
-        const handleClose = () => {
-            if (dontShow) try { localStorage.setItem('game_equation_hide_guide_v2', 'true'); } catch(e){}
-            onClose();
-        };
-        if (!isOpen) return null;
-        return (
-           <Modal isOpen={isOpen} title="📜 新手入門指引" onClose={handleClose}>
-             <div className="space-y-6">
-                <div className="flex gap-4"><div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">1</div><div><h4 className="text-wuxia-gold font-bold">挑選寶物</h4><p className="text-stone-400 text-sm">選擇您需要的遊戲輔助或虛寶，點擊「加入行囊」。</p></div></div>
-                <div className="flex gap-4"><div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">2</div><div><h4 className="text-wuxia-gold font-bold">確認行囊</h4><p className="text-stone-400 text-sm">點擊右上角購物車，確認數量後提交訂單。</p></div></div>
-                <div className="flex gap-4"><div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">3</div><div><h4 className="text-wuxia-gold font-bold">付款回報</h4><p className="text-stone-400 text-sm">轉帳後，請輸入「帳號後五碼」並送出以供對帳。</p></div></div>
-                <div className="flex gap-4"><div className="flex-shrink-0 w-8 h-8 rounded-full bg-wuxia-red text-white flex items-center justify-center font-bold border border-wuxia-gold">4</div><div><h4 className="text-wuxia-gold font-bold">自動發貨</h4><p className="text-stone-400 text-sm">系統確認入帳後(約5分鐘)，請至「票券夾」領取卡號。</p></div></div>
-                <div className="pt-2">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><input type="checkbox" id="no-guide" checked={dontShow} onChange={e => setDontShow(e.target.checked)} className="w-4 h-4 accent-wuxia-red cursor-pointer" /><label htmlFor="no-guide" className="text-stone-400 text-sm cursor-pointer select-none">下次不再顯示此訊息</label></div>
-                    <button onClick={handleClose} className="w-full py-3 bg-gradient-to-r from-wuxia-gold-dark to-wuxia-gold text-black font-bold rounded shadow-lg hover:brightness-110 transition">我已瞭解，開始冒險！</button>
-                </div>
-             </div>
-           </Modal>
-        );
-      };
+               )})}
+            </div>
+         )}
+      </Modal>
+   );
+};
 
       const ReportModal = ({ isOpen, user, onClose, onLogin, initialType, products }) => {
         const [type, setType] = React.useState(initialType || '充值問題');
         const [desc, setDesc] = React.useState('');
-        const [relatedProduct, setRelatedProduct] = React.useState('');
+        const [relatedProduct, setRelatedProduct] = React.useState(''); // New State
         const [status, setStatus] = React.useState('idle');
 
-        React.useEffect(() => { if(isOpen && initialType) setType(initialType); }, [isOpen, initialType]);
+        React.useEffect(() => {
+           if(isOpen && initialType) setType(initialType);
+        }, [isOpen, initialType]);
 
         const handleSubmit = async () => {
           if (!user || user.userId === 'test-user') return Swal.fire({ icon: 'warning', title: '請先登入', confirmButtonText: '登入', preConfirm: onLogin });
           if (!desc.trim()) return Swal.fire({ icon: 'warning', title: '請填寫描述', confirmButtonText: '好' });
           setStatus('submitting');
           try {
-            await submitIssueReport({ userId: user.userId, displayName: user.displayName, type, description: desc, productName: relatedProduct });
+            await submitIssueReport({ 
+               userId: user.userId, 
+               displayName: user.displayName, 
+               type, 
+               description: desc,
+               productName: relatedProduct // Pass product name
+            });
             setStatus('success');
             setTimeout(() => { onClose(); setStatus('idle'); setDesc(''); setRelatedProduct(''); }, 2000);
           } catch(e) { Swal.fire({ icon: 'error', title: '發送失敗' }); setStatus('idle'); }
@@ -704,7 +1042,37 @@
         const [user, setUser] = React.useState(null);
         const [loading, setLoading] = React.useState(true);
         const [error, setError] = React.useState(null);
-        
+        const handleArchiveOrder = async (orderId) => {
+    try {
+      let result;
+      if (isGAS) {
+        result = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .archiveOrder(orderId);
+        });
+      } else {
+        result = await fetch(`${GAS_API_URL}?action=archiveOrder&orderId=${orderId}`)
+          .then(res => res.json());
+      }
+      
+      if(result.success) {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: '已標記為完成儲值',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#2b1212',
+          color: '#fff'
+        });
+      }
+    } catch(e) {
+      Swal.fire('錯誤', e.message, 'error');
+    }
+  };
         const [cart, setCart] = React.useState([]);
         const [showCart, setShowCart] = React.useState(false);
         const [cartTotal, setCartTotal] = React.useState(0);
@@ -722,11 +1090,11 @@
         const [showWallet, setShowWallet] = React.useState(false);
         const [showAdmin, setShowAdmin] = React.useState(false); 
         const [showGuide, setShowGuide] = React.useState(false); 
-        const [showProfile, setShowProfile] = React.useState(false); 
+        const [showProfile, setShowProfile] = React.useState(false); // ★ Profile Modal State
 
         const [isProcessing, setIsProcessing] = React.useState(false);
         const [activeCategory, setActiveCategory] = React.useState('全部');
-        const [unreadCount, setUnreadCount] = React.useState(0); 
+        const [unreadCount, setUnreadCount] = React.useState(0); // ★ Notification Count
 
         React.useEffect(() => {
            setCartTotal(cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0));
@@ -746,7 +1114,7 @@
              } else {
                 setUser({ userId: 'test-user', displayName: '訪客', pictureUrl: '', os: 'web' });
              }
-             // Check Guide
+             // ★ Check LocalStorage for guide preference
              const hasSeenGuide = localStorage.getItem('game_equation_hide_guide_v2');
              if (!hasSeenGuide) setShowGuide(true);
           } catch (err) {
@@ -764,11 +1132,13 @@
           } catch (err) { setError('無法讀取商品列表'); } finally { setLoading(false); }
         }, []);
 
-        // Fetch orders for notifications/pending check
+        // ★ New: Fetch orders to check for unread items and pending reminder
         const checkOrders = React.useCallback(async () => {
            if (!user || user.userId === 'test-user') return;
            try {
               const orders = await getMyOrders(user.userId);
+              
+              // 1. Check for Pending Orders (30 mins rule)
               const pendingOrder = orders.find(o => {
                  if (o.status !== '待處理') return false;
                  const diff = Date.now() - new Date(o.date).getTime();
@@ -786,6 +1156,7 @@
                  });
               }
 
+              // 2. Check for New Completed Orders (Notification)
               const completedOrders = orders.filter(o => o.status === '已發貨').map(o => o.orderId);
               const lastKnownCount = parseInt(localStorage.getItem('game_equation_seen_count') || '0', 10);
               
@@ -808,7 +1179,7 @@
           return products.filter(p => (p.category || '').trim() === activeCategory);
         }, [products, activeCategory]);
 
-        const categories = ['全部', '電腦遊戲', '手機遊戲', '網頁遊戲'];
+        const categories = ['全部', '電腦遊戲', '手機遊戲', '網頁遊戲']; // ★ Added Web Game
 
         const openAddToCart = (product) => { setTempProduct(product); setTempQty(1); };
         const confirmAddToCart = () => {
@@ -827,39 +1198,77 @@
         };
 
         const submitOrder = async () => {
-           if (cart.length === 0) return;
-           if (!user || user.userId === 'test-user') {
-              Swal.fire({ icon: 'info', title: '請先登入', showCancelButton: true, confirmButtonText: 'LINE 登入' }).then((r) => { if (r.isConfirmed) loginWithLiffUrl(); });
-              return;
-           }
-           setIsProcessing(true);
-           try {
-             const result = await withTimeout(processCartOrderBackend({ userId: user.userId, displayName: user.displayName }, "", cart), 30000);
-             if (result.success) {
-               if (window.liff && window.liff.isInClient()) {
-                 const itemListStr = cart.map(item => `- ${item.product.name} x${item.quantity}`).join('\n');
-                 try {
-                   await window.liff.sendMessages([{
-                     type: 'text',
-                     text: `【訂單已成立】\n單號：${result.orderId}\n金額：$${cartTotal}\n\n請依照網頁指示進行付款，完成後您的商品將會自動發送。`
-                   }]);
-                 } catch (msgErr) { console.error("Line Msg Error:", msgErr); }
-               }
-               setCart([]); 
-               setCurrentOrderId(result.orderId); 
-               setCurrentOrderPrice(cartTotal); 
-               setShowCart(false); 
-               setShowBankInfo(true);
-             } else {
-               Swal.fire({ icon: 'error', title: '訂單建立失敗', text: result.message });
-             }
-           } catch (err) {
-             console.error("Order Error:", err);
-             Swal.fire({ icon: 'error', title: '系統繁忙', text: err.message });
-           } finally {
-             setIsProcessing(false);
-           }
-        };
+   if (cart.length === 0) return;
+   if (!user || user.userId === 'test-user') {
+      Swal.fire({ 
+         icon: 'info', 
+         title: '請先登入', 
+         showCancelButton: true, 
+         confirmButtonText: 'LINE 登入' 
+      }).then((r) => { if (r.isConfirmed) loginWithLiffUrl(); });
+      return;
+   }
+   
+   setIsProcessing(true);
+   
+   try {
+     const result = await withTimeout(
+        processCartOrderBackend({ 
+           userId: user.userId, 
+           displayName: user.displayName 
+        }, "", cart), 
+        30000
+     );
+     
+     if (result.success) {
+       // ★ 改進: 更完整詳細的LINE訊息
+       if (window.liff && window.liff.isInClient()) {
+         let messageText = `【訂單已成立】\n`;
+         messageText += `━━━━━━━━━━━━━━━\n`;
+         messageText += `📝 訂單編號: ${result.orderId}\n`;
+         messageText += `💰 訂單金額: $${cartTotal}\n`;
+         messageText += `🎮 購買商品:\n`;
+         
+         // ★ 改進: 顯示每個商品的詳細資訊
+         result.items.forEach((item, index) => {
+           messageText += `  ${index + 1}. ${item.name}\n`;
+           messageText += `     類型: ${item.category}\n`;
+           messageText += `     數量: x${item.quantity}\n`;
+         });
+         
+         messageText += `\n━━━━━━━━━━━━━━━\n`;
+         messageText += `💳 匯款帳號:\n`;
+         messageText += `${BANK_INFO.name} (${BANK_INFO.code})\n`;
+         messageText += `${BANK_INFO.account}\n`;
+         messageText += `\n⏰ 請於30分鐘內完成付款\n`;
+         messageText += `📱 完成後請在網頁回報「帳號後五碼」\n`;
+         messageText += `🎁 系統將自動發送商品到您的票券夾`;
+         
+         try {
+           await window.liff.sendMessages([{
+             type: 'text',
+             text: messageText
+           }]);
+         } catch (msgErr) { 
+           console.error("Line訊息發送錯誤:", msgErr); 
+         }
+       }
+       
+       setCart([]); 
+       setCurrentOrderId(result.orderId); 
+       setCurrentOrderPrice(cartTotal);
+       setShowCart(false); 
+       setShowBankInfo(true);
+     } else {
+       Swal.fire({ icon: 'error', title: '訂單建立失敗', text: result.message });
+     }
+   } catch (err) {
+     console.error("Order Error:", err);
+     Swal.fire({ icon: 'error', title: '系統繁忙', text: err.message });
+   } finally {
+     setIsProcessing(false);
+   }
+};
 
         const confirmPaymentInfo = async () => {
            if (!paymentNote.trim()) return Swal.fire({ icon: 'warning', title: '請輸入後五碼', text: '我們需要這項資訊來對帳' });
@@ -896,7 +1305,7 @@
                  const result = await cancelOrderBackend(user.userId, orderId);
                  if(result.success) {
                     Swal.fire({icon:'success', title:'已取消', timer:1500, showConfirmButton:false});
-                    setShowWallet(false); 
+                    setShowWallet(false); // Close to force refresh next open, or could reload
                  } else {
                     Swal.fire({icon:'error', title:'取消失敗', text:result.message});
                  }
@@ -904,11 +1313,13 @@
            }
         };
 
+        // Reset notification count when opening wallet
         const handleOpenWallet = () => {
            if(!user || user.userId === 'test-user') {
               return Swal.fire({icon:'info', title:'請先登入', showCancelButton:true, confirmButtonText:'LINE 登入', cancelButtonText:'取消'}).then(r => { if(r.isConfirmed) loginWithLiffUrl(); });
            }
            setUnreadCount(0);
+           // Store current count of 'completed' orders to ignore them next time
            getMyOrders(user.userId).then(orders => {
               const count = orders.filter(o => o.status === '已發貨').length;
               localStorage.setItem('game_equation_seen_count', count.toString());
@@ -921,7 +1332,7 @@
             <Navbar 
                 user={user} 
                 cartCount={cart.reduce((a,b)=>a+b.quantity, 0)} 
-                unreadCount={unreadCount} 
+                unreadCount={unreadCount} // ★ Notification
                 onReport={() => { setReportInitType('充值問題'); setShowReport(true); }} 
                 onSuggest={() => { setReportInitType('功能建議'); setShowReport(true); }}
                 onWallet={handleOpenWallet} 
@@ -931,7 +1342,7 @@
             />
             <AnnouncementBar />
 
-            <main className="container mx-auto px-4 pt-28">
+            <main className="container mx-auto px-4 pt-28"> {/* Adjusted padding for marquee */}
               <div className="mb-12 text-center relative">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-wuxia-red/20 blur-[80px] rounded-full -z-10 animate-pulse"></div>
                 <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight"><span className="text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-100 to-wuxia-gold drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">遊戲方程式</span>
@@ -966,9 +1377,7 @@
             <Modal isOpen={!!tempProduct} title="加入行囊" onClose={() => setTempProduct(null)}>
                 {tempProduct && (
                   <div className="text-center space-y-4">
-                    <div className="w-full h-32 rounded border border-wuxia-gold/30 overflow-hidden mb-4 relative bg-black">
-                      <img src={tempProduct.imageUrl} alt={tempProduct.name} onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}} className="w-full h-full object-cover opacity-80" />
-                    </div>
+                    <div className="w-full h-32 rounded border border-wuxia-gold/30 overflow-hidden mb-4 relative bg-black"><img src={tempProduct.imageUrl} alt={tempProduct.name} className="w-full h-full object-cover opacity-80" /></div>
                     <h3 className="text-xl font-bold text-white tracking-wide">{tempProduct.name}</h3>
                     <div className="flex items-center justify-center gap-4 my-4">
                         <button onClick={() => setTempQty(Math.max(1, tempQty - 1))} className="w-8 h-8 rounded bg-stone-700 text-white font-bold hover:bg-wuxia-red transition">-</button>
@@ -990,10 +1399,7 @@
                      {cart.map((item, idx) => (
                         <div key={idx} className="bg-black/30 p-3 rounded border border-stone-800 flex flex-col gap-3">
                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3">
-                                 <img src={item.product.imageUrl} onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}} className="w-12 h-12 object-cover rounded border border-stone-600"/>
-                                 <div className="flex-1"><p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p><p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p></div>
-                              </div>
+                              <div className="flex items-center gap-3"><img src={item.product.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-600"/><div className="flex-1"><p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p><p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p></div></div>
                               <button onClick={() => removeFromCart(item.product.id)} className="text-stone-500 hover:text-red-500 p-1"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                            </div>
                            <div className="flex justify-between items-center pl-[60px]">
@@ -1046,7 +1452,7 @@
                 onClose={() => setShowReport(false)} 
                 onLogin={loginWithLiffUrl} 
                 initialType={reportInitType} 
-                products={products} 
+                products={products} // ★ Pass Products
             />
             <WalletModal 
                 isOpen={showWallet} 
@@ -1056,8 +1462,8 @@
                 onOpenAdmin={() => { setShowWallet(false); setShowAdmin(true); }}
                 onCancelOrder={handleWalletCancelOrder}
                 onReportPayment={handleWalletReportPayment}
-                products={products} 
-                onBuyAgain={openAddToCart} 
+                products={products} // ★ Pass Products for Buy Again
+                onBuyAgain={openAddToCart} // ★ Pass Buy Again Handler
             />
             <ProfileModal 
                 isOpen={showProfile} 
