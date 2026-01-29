@@ -115,8 +115,19 @@
           if (!isGAS) {
              console.log(`[Mock GAS] Call ${funcName}`, args);
              // Simple Mocks for offline testing
-             if(funcName === 'getProducts') return resolve([]);
+             if(funcName === 'getProducts') return resolve([
+                { id: 'pc-1', name: '新武林同萌傳輔助 - 30天月卡', description: '暢遊武林！30天尊榮會員', price: 150, imageUrl: 'https://placehold.co/400x300/2b1212/fbbf24?text=WuLin', category: '電腦遊戲' },
+                { id: 'pc-2', name: '新武林同萌傳輔助 - 360天年卡', description: '年度超值方案！', price: 1050, imageUrl: 'https://placehold.co/400x300/991b1b/ffffff?text=WuLin+Year', category: '電腦遊戲' },
+                { id: 'mob-chaos', name: '卡厄思夢境輔助 - 月卡', description: '夢境冒險，每日領取鑽石', price: 250, imageUrl: 'https://placehold.co/400x300/4a044e/e879f9?text=Chaos', category: '手機遊戲' }
+             ]);
              if(funcName === 'getUserOrders') return resolve([]);
+             if(funcName === 'handleAdminAction') return resolve({ 
+                success: true, 
+                orders: [{ rowIndex: 2, orderId: 'ORD-TEST', date: '2023-10-27', userName: 'TestUser', productName: 'Mock Product', price: 150, paymentNote: '12345' }], 
+                inventory: [], 
+                products: [{ id: 'pc-1', name: 'Mock Product' }], 
+                users: [] 
+             });
              return resolve({success:true}); 
           }
           google.script.run
@@ -266,7 +277,12 @@
         return (
           <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
             <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
-              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+              <img 
+                src={product.imageUrl} 
+                alt={product.name} 
+                onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" 
+              />
               <div className={`absolute top-2 right-2 backdrop-blur-md px-3 py-0.5 rounded text-xs font-bold border shadow-lg tracking-widest ${tagClass}`}>{product.category}</div>
             </div>
             <div className="p-5 flex flex-col flex-grow relative">
@@ -375,7 +391,7 @@
                <>
                  {activeTab === 'orders' && (
                    <div className="space-y-4">
-                      {data.orders.length === 0 ? <p className="text-center text-stone-500">目前沒有待處理訂單。</p> : 
+                      {(!data.orders || data.orders.length === 0) ? <p className="text-center text-stone-500">目前沒有待處理訂單。</p> : 
                         data.orders.map((ord, i) => (
                            <div key={i} className="bg-black/30 p-3 rounded border border-wuxia-gold/20 flex justify-between items-center">
                               <div>
@@ -397,7 +413,7 @@
                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                             <select value={invProdId} onChange={e => setInvProdId(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs">
                                <option value="">-- 選擇商品 --</option>
-                               {data.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                               {data.products && data.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                             <input type="text" placeholder="卡號 / Code" value={invCode} onChange={e => setInvCode(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs" />
                             <input type="text" placeholder="密碼 / Password (選填)" value={invPass} onChange={e => setInvPass(e.target.value)} className="bg-black border border-stone-600 rounded p-2 text-white text-xs" />
@@ -405,7 +421,7 @@
                          </div>
                       </div>
                       <div className="space-y-2 h-64 overflow-y-auto pr-2">
-                         {data.inventory.map((inv, i) => (
+                         {data.inventory && data.inventory.map((inv, i) => (
                             <div key={i} className="flex justify-between items-center bg-black/20 p-2 rounded border border-stone-800">
                                <div className="overflow-hidden">
                                   <p className="text-stone-300 text-xs font-bold truncate">{inv.productName}</p>
@@ -423,7 +439,7 @@
 
                  {activeTab === 'users' && (
                    <div className="space-y-2">
-                      {data.users.map((u, i) => (
+                      {data.users && data.users.map((u, i) => (
                          <div key={i} className="flex justify-between p-2 border-b border-stone-800">
                             <div><p className="text-sm text-stone-200">{u.name}</p><p className="text-[10px] text-stone-500">{u.uid}</p></div>
                             <span className="text-xs text-stone-600">{u.date}</span>
@@ -950,7 +966,9 @@
             <Modal isOpen={!!tempProduct} title="加入行囊" onClose={() => setTempProduct(null)}>
                 {tempProduct && (
                   <div className="text-center space-y-4">
-                    <div className="w-full h-32 rounded border border-wuxia-gold/30 overflow-hidden mb-4 relative bg-black"><img src={tempProduct.imageUrl} alt={tempProduct.name} className="w-full h-full object-cover opacity-80" /></div>
+                    <div className="w-full h-32 rounded border border-wuxia-gold/30 overflow-hidden mb-4 relative bg-black">
+                      <img src={tempProduct.imageUrl} alt={tempProduct.name} onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}} className="w-full h-full object-cover opacity-80" />
+                    </div>
                     <h3 className="text-xl font-bold text-white tracking-wide">{tempProduct.name}</h3>
                     <div className="flex items-center justify-center gap-4 my-4">
                         <button onClick={() => setTempQty(Math.max(1, tempQty - 1))} className="w-8 h-8 rounded bg-stone-700 text-white font-bold hover:bg-wuxia-red transition">-</button>
@@ -972,7 +990,10 @@
                      {cart.map((item, idx) => (
                         <div key={idx} className="bg-black/30 p-3 rounded border border-stone-800 flex flex-col gap-3">
                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3"><img src={item.product.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-600"/><div className="flex-1"><p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p><p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p></div></div>
+                              <div className="flex items-center gap-3">
+                                 <img src={item.product.imageUrl} onError={(e) => {e.target.onerror = null; e.target.src = "https://placehold.co/400x300/2b1212/fbbf24?text=Image+Error"}} className="w-12 h-12 object-cover rounded border border-stone-600"/>
+                                 <div className="flex-1"><p className="text-white text-sm font-bold line-clamp-1">{item.product.name}</p><p className="text-stone-400 text-xs font-mono">${item.product.price} / 單位</p></div>
+                              </div>
                               <button onClick={() => removeFromCart(item.product.id)} className="text-stone-500 hover:text-red-500 p-1"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                            </div>
                            <div className="flex justify-between items-center pl-[60px]">
