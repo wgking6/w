@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>免費領取英雄令 - 遊戲方程式</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'jade-bg': '#051f18',        // 深翠綠背景
+              'jade-card': '#0f382e',      // 卡片綠
+              'jade-light': '#34d399',     // 亮玉色
+              'jade-dark': '#064e3b',      // 暗玉色
+              'jade-accent': '#10b981',    // 強調綠
+              'gold': '#fbbf24',           // 金色
+              'text-white': '#f0fdf4',     // 淺白
+            },
+            animation: {
+               'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #051f18;
+        background-image: radial-gradient(circle at 50% 0%, #064e3b 0%, #051f18 70%);
+        color: #f0fdf4;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      .jade-glow { text-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
+      .bg-pattern { background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2310b981' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+      .swal2-popup { background: #0f382e !important; border: 1px solid #34d399; color: #f0fdf4 !important; }
+      .swal2-title { color: #34d399 !important; }
+      .swal2-confirm { background: linear-gradient(to right, #10b981, #059669) !important; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+      const LIFF_ID = '2008912922-0bJiM0sT'; 
+      const LIFF_URL = `https://liff.line.me/${LIFF_ID}?p=demo`; // 指向 Demo 頁面
+      const isGAS = typeof google !== 'undefined' && google.script;
+
+      // ==========================================
+      // Services
+      // ==========================================
+      const getDemoCampaigns = () => {
+        return new Promise((resolve, reject) => {
+          if (isGAS) {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getDemoCampaigns();
+          } else {
+            // Mock
+            setTimeout(() => resolve([
+               {id:'demo-1', name:'新武林同萌傳 (1小時體驗)', count: 5},
+               {id:'demo-2', name:'RO仙境傳說 (1小時體驗)', count: 0},
+            ]), 500);
+          }
+        });
+      };
+
+      const claimDemoCard = (userId, displayName, gameId) => {
+         return new Promise((resolve, reject) => {
+            if (isGAS) {
+               google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).claimDemoCard(userId, displayName, gameId);
+            } else {
+               setTimeout(() => resolve({success: true, message:'領取成功', data:{code:'TEST-CODE', password:'123'}}), 1000);
+            }
+         });
+      };
+
+      const getMyDemoClaims = (userId) => {
+         return new Promise((resolve, reject) => {
+            if (isGAS) {
+               google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getMyDemoClaims(userId);
+            } else {
+               setTimeout(() => resolve([{gameName:'MOCK GAME', code:'ABC', password:'123', date: new Date()}]), 500);
+            }
+         });
+      };
+
+      // ==========================================
+      // Components
+      // ==========================================
+      
+      const Navbar = ({ user, onOpenWallet, onLogin }) => {
+        return (
+           <nav className="fixed top-0 w-full z-50 bg-[#051f18]/90 backdrop-blur border-b border-jade-dark shadow-lg">
+              <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-jade-accent flex items-center justify-center text-[#051f18] font-bold text-lg">令</div>
+                    <span className="font-bold text-lg text-jade-light tracking-widest">免費英雄令</span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                    {user && user.userId !== 'test-user' ? (
+                       <button onClick={onOpenWallet} className="flex items-center gap-1 px-3 py-1 bg-jade-dark/50 border border-jade-light/30 rounded text-jade-light hover:bg-jade-accent hover:text-black transition text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                          藏寶閣
+                       </button>
+                    ) : (
+                       <button onClick={onLogin} className="px-3 py-1 bg-[#06C755] text-white text-xs rounded font-bold">LINE 登入</button>
+                    )}
+                 </div>
+              </div>
+           </nav>
+        );
+      };
+
+      const HeroCard = ({ item, onClaim }) => {
+         const isAvailable = item.count > 0;
+         return (
+            <div className="relative bg-jade-card rounded-lg overflow-hidden border border-jade-dark shadow-xl hover:shadow-jade-accent/20 transition-all duration-300 group">
+               <div className="h-24 bg-gradient-to-r from-jade-dark to-[#051f18] p-4 flex items-center relative overflow-hidden">
+                  <div className="absolute right-0 top-0 opacity-10 text-6xl text-white font-serif italic translate-x-4 -translate-y-2">Free</div>
+                  <h3 className="text-xl font-bold text-white relative z-10">{item.name}</h3>
+               </div>
+               <div className="p-4 bg-pattern">
+                  <div className="flex justify-between items-center mb-4">
+                     <span className="text-xs text-jade-light/70 uppercase tracking-widest">Available Stock</span>
+                     <span className={`text-2xl font-mono font-bold ${isAvailable ? 'text-jade-accent' : 'text-red-500'}`}>{item.count}</span>
+                  </div>
+                  <p className="text-xs text-stone-400 mb-4 h-8 line-clamp-2">領取此英雄令，即可免費獲得測試帳號一組 (每人限領一次)。</p>
+                  <button 
+                     onClick={() => onClaim(item)}
+                     disabled={!isAvailable}
+                     className={`w-full py-2 rounded font-bold tracking-widest transition shadow-lg ${isAvailable ? 'bg-gradient-to-r from-jade-accent to-jade-light text-[#051f18] hover:brightness-110' : 'bg-stone-700 text-stone-500 cursor-not-allowed'}`}
+                  >
+                     {isAvailable ? '立即領取' : '已發放完畢'}
+                  </button>
+               </div>
+            </div>
+         );
+      };
+
+      const Modal = ({ isOpen, title, onClose, children }) => {
+         if (!isOpen) return null;
+         return (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+             <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose}></div>
+             <div className="relative bg-jade-card border border-jade-light/50 w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+               <div className="p-4 border-b border-jade-light/20 flex justify-between items-center bg-black/20">
+                 <h3 className="text-lg font-bold text-jade-light">{title}</h3>
+                 <button onClick={onClose} className="text-stone-500 hover:text-white">✕</button>
+               </div>
+               <div className="p-4 max-h-[80vh] overflow-y-auto">{children}</div>
+             </div>
+           </div>
+         );
+      };
+
+      const App = () => {
+         const [user, setUser] = React.useState(null);
+         const [campaigns, setCampaigns] = React.useState([]);
+         const [loading, setLoading] = React.useState(true);
+         const [showWallet, setShowWallet] = React.useState(false);
+         const [myTokens, setMyTokens] = React.useState([]);
+         const [claiming, setClaiming] = React.useState(false);
+
+         // Init LIFF
+         React.useEffect(() => {
+            const init = async () => {
+               try {
+                  await liff.init({ liffId: LIFF_ID });
+                  if (liff.isLoggedIn()) {
+                     const profile = await liff.getProfile();
+                     setUser({ userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl });
+                  } else {
+                     setUser({ userId: 'test-user', displayName: '俠客', pictureUrl: '' });
+                  }
+               } catch (e) {
+                  console.error(e);
+                  setUser({ userId: 'test-user', displayName: '離線俠客', pictureUrl: '' });
+               }
+            };
+            init();
+         }, []);
+
+         // Load Data
+         React.useEffect(() => {
+            const load = async () => {
+               setLoading(true);
+               try {
+                  const data = await getDemoCampaigns();
+                  setCampaigns(data);
+               } catch (e) { console.error(e); }
+               setLoading(false);
+            };
+            load();
+         }, []);
+
+         const handleLogin = () => {
+             // 強制重導向以解決 iframe cookie 問題
+             window.top.location.href = LIFF_URL;
+         };
+
+         const checkFriendship = async () => {
+            if (!liff.isInClient()) return true; // 外部瀏覽器無法檢查，暫時放行或要求從 LINE 開啟
+            try {
+               const friendship = await liff.getFriendship();
+               return friendship.friendFlag;
+            } catch (e) {
+               console.error(e);
+               return false; // 保守策略
+            }
+         };
+
+         const handleClaim = async (item) => {
+            if (!user || user.userId === 'test-user') {
+               return Swal.fire({
+                  icon: 'info',
+                  title: '請先登入',
+                  text: '需要驗證俠客身分才能領取',
+                  confirmButtonText: 'LINE 登入',
+                  showCancelButton: true
+               }).then(r => { if(r.isConfirmed) handleLogin(); });
+            }
+
+            // 1. 檢查好友狀態
+            if (liff.isInClient()) {
+                const isFriend = await checkFriendship();
+                if (!isFriend) {
+                   return Swal.fire({
+                      icon: 'warning',
+                      title: '請先加入官方好友',
+                      text: '領取英雄令需先與遊戲方程式歃血為盟 (加入好友)',
+                      confirmButtonText: '前往加入',
+                      showCancelButton: true,
+                      cancelButtonText: '稍後'
+                   }).then((result) => {
+                      if (result.isConfirmed) {
+                         // 開啟加好友頁面 (Bot ID 需替換成真實的)
+                         // 這裡假設是透過 LIFF 內建機制或引導至 Bot Profile
+                         window.location.href = 'https://line.me/R/ti/p/@299ycrgo'; // 請替換成您的 Line OA ID
+                      }
+                   });
+                }
+            }
+
+            // 2. 執行領取
+            setClaiming(true);
+            try {
+               const result = await claimDemoCard(user.userId, user.displayName, item.id);
+               if (result.success) {
+                  Swal.fire({
+                     icon: 'success',
+                     title: '領取成功！',
+                     html: `
+                        <div class="bg-black/40 p-3 rounded border border-jade-accent/30 mt-2 text-left">
+                           <p class="text-xs text-stone-400">遊戲：${result.data.gameName}</p>
+                           <p class="text-jade-light font-mono text-lg font-bold mt-1 select-all">${result.data.code}</p>
+                           <p class="text-xs text-stone-500 mt-1">密碼：${result.data.password}</p>
+                        </div>
+                        <p class="text-xs text-stone-400 mt-3">已存入「藏寶閣」</p>
+                     `,
+                     confirmButtonText: '太好了'
+                  });
+                  // Refresh stock
+                  const newData = await getDemoCampaigns();
+                  setCampaigns(newData);
+               } else {
+                  Swal.fire({ icon: 'error', title: '領取失敗', text: result.message });
+               }
+            } catch (e) {
+               Swal.fire({ icon: 'error', title: '錯誤', text: '系統異常' });
+            } finally {
+               setClaiming(false);
+            }
+         };
+
+         const openWallet = async () => {
+            if (!user || user.userId === 'test-user') return handleLogin();
+            setShowWallet(true);
+            const tokens = await getMyDemoClaims(user.userId);
+            setMyTokens(tokens);
+         };
+
+         return (
+            <div className="min-h-screen pb-10 bg-pattern">
+               <Navbar user={user} onOpenWallet={openWallet} onLogin={handleLogin} />
+               
+               <div className="pt-24 px-4 container mx-auto max-w-3xl">
+                  <div className="text-center mb-8">
+                     <h1 className="text-3xl font-bold text-jade-light jade-glow mb-2">廣發英雄帖</h1>
+                     <p className="text-stone-400 text-sm">每位俠客限領一張 • 數量有限送完為止</p>
+                     {!liff.isInClient() && <p className="text-xs text-yellow-500 mt-2">* 建議在 LINE App 中開啟以獲得完整體驗</p>}
+                  </div>
+
+                  {loading ? (
+                     <div className="text-center py-10 text-jade-light animate-pulse">正在飛鴿傳書讀取中...</div>
+                  ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {campaigns.map(c => <HeroCard key={c.id} item={c} onClaim={handleClaim} />)}
+                     </div>
+                  )}
+               </div>
+
+               {/* Wallet Modal */}
+               <Modal isOpen={showWallet} title="藏寶閣 (我的測試卡)" onClose={() => setShowWallet(false)}>
+                  {myTokens.length === 0 ? (
+                     <div className="text-center py-8 text-stone-500">尚無任何英雄令<br/>快去領取吧！</div>
+                  ) : (
+                     <div className="space-y-3">
+                        {myTokens.map((token, i) => (
+                           <div key={i} className="bg-black/40 p-3 rounded border border-jade-light/20">
+                              <div className="flex justify-between items-start">
+                                 <h4 className="text-white font-bold text-sm">{token.gameName}</h4>
+                                 <span className="text-[10px] text-stone-500">{new Date(token.date).toLocaleDateString()}</span>
+                              </div>
+                              <div className="mt-2 bg-[#051f18] p-2 rounded relative border border-jade-dark">
+                                 <p className="text-jade-accent font-mono text-sm break-all">{token.code}</p>
+                                 <p className="text-stone-400 font-mono text-xs mt-1">PWD: {token.password}</p>
+                                 <button 
+                                    onClick={() => { navigator.clipboard.writeText(`${token.code}\n${token.password}`); Swal.fire({toast:true, position:'top-end', icon:'success', title:'已複製', timer:1000, showConfirmButton:false}); }}
+                                    className="absolute right-2 top-2 text-[10px] text-jade-light border border-jade-light/30 px-2 py-0.5 rounded hover:bg-jade-light hover:text-black transition"
+                                 >
+                                    複製
+                                 </button>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  )}
+               </Modal>
+
+               {claiming && (
+                  <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center flex-col">
+                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-jade-dark border-t-jade-light mb-4"></div>
+                     <p className="text-jade-light text-lg font-bold animate-pulse">正在開啟庫房...</p>
+                  </div>
+               )}
+            </div>
+         );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<React.StrictMode><App /></React.StrictMode>);
+    </script>
+  </body>
+</html>
