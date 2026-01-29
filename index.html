@@ -415,7 +415,7 @@
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-              <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.6</span>
+              <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.7</span>
             </div>
             <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
           </div>
@@ -930,13 +930,13 @@
                         </div>
                      )}
                      
-                     {/* ★ 修正: 已發貨狀態 - 每行顯示 "卡號 / 卡密" */}
+                     {/* ★ 修正: 已發貨狀態 - 每行顯示 "1. 卡號... " */}
                      {order.status === '已發貨' && (
                         <div className="space-y-2 mt-2">
                            <div className="bg-[#1a0f0f] p-3 rounded border border-wuxia-jade/20 relative">
                               {/* 標題與操作按鈕 */}
                               <div className="flex justify-between items-center mb-2">
-                                 <p className="text-[11px] text-stone-500 uppercase">🎫 您的卡密</p>
+                                 <p className="text-[11px] text-stone-500">您的卡號、卡密如下:</p>
                                  <div className="flex gap-2">
                                     {/* 複製按鈕 */}
                                     <button 
@@ -970,7 +970,7 @@
                                  </div>
                               </div>
                               
-                              {/* ★ 修正: 卡密顯示區 - 格式為 "卡號 / 卡密" */}
+                              {/* ★ 修正: 卡密顯示區 - 格式為 "1. 卡號... " */}
                               <div className="bg-black/50 p-3 rounded">
                                  <pre className="text-wuxia-jade font-mono text-xs whitespace-pre-wrap select-all leading-relaxed">
 {order.codes}
@@ -1483,7 +1483,7 @@
                 onClose={() => setShowReport(false)} 
                 onLogin={loginWithLiffUrl} 
                 initialType={reportInitType} 
-                products={products} // ★ Pass Products
+                products={products} 
             />
             <WalletModal 
                 isOpen={showWallet} 
@@ -1493,8 +1493,8 @@
                 onOpenAdmin={() => { setShowWallet(false); setShowAdmin(true); }}
                 onCancelOrder={handleWalletCancelOrder}
                 onReportPayment={handleWalletReportPayment}
-                products={products} // ★ Pass Products for Buy Again
-                onBuyAgain={openAddToCart} // ★ Pass Buy Again Handler
+                products={products} 
+                onBuyAgain={openAddToCart} 
             />
             <ProfileModal 
                 isOpen={showProfile} 
