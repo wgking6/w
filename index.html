@@ -305,7 +305,7 @@
         let tagClass = 'bg-blue-900/80 border-blue-500 text-blue-100';
         if (isMobile) tagClass = 'bg-purple-900/80 border-purple-500 text-purple-100';
         if (isWeb) tagClass = 'bg-green-900/80 border-green-500 text-green-100';
-        const isCompact = colCount >= 4;
+        const isCompact = colCount >= 3;
         return (
           <div className="group relative bg-wuxia-card rounded-lg overflow-hidden border border-wuxia-gold-dark/50 shadow-xl hover:shadow-wuxia-red/20 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full bg-pattern-cloud">
             <div className="aspect-video w-full overflow-hidden bg-black relative border-b border-wuxia-gold-dark/30">
@@ -448,9 +448,86 @@
 
         const refresh = () => setRefreshKey(k => k+1);
 
-        const handleFulfill = (rowIndex, orderId) => {
-          Swal.fire({ title:'確認強制發貨？', text:`單號：${orderId}`, icon:'warning', showCancelButton:true, confirmButtonText:'發貨', cancelButtonText:'取消' })
-            .then(r => { if(r.isConfirmed) callAdminApi('manualFulfill', { rowIndex }).then(() => { Swal.fire('成功','已執行發貨程序','success'); refresh(); }).catch(e => Swal.fire('失敗', e.message, 'error')); });
+        // Fix 4: 強制發貨先詢問推播方式
+        const handleFulfill = async (rowIndex, orderId, userName) => {
+          const { value: pushMode } = await Swal.fire({
+            title: `強制發貨`,
+            html: `<div style="text-align:left;font-size:13px;color:#d6d3d1">
+              <p style="margin-bottom:8px">單號：<span style="color:#fbbf24;font-mono">${orderId}</span></p>
+              <p style="margin-bottom:12px">客戶：${userName}</p>
+              <p style="color:#a8a29e;margin-bottom:6px">請選擇發貨通知方式：</p>
+            </div>`,
+            icon: 'question',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: '🤖 自動推播 (LINE Bot)',
+            denyButtonText: '📋 手動複製 (複製卡密)',
+            cancelButtonText: '取消',
+            confirmButtonColor: '#16a34a',
+            denyButtonColor: '#1d4ed8',
+            background: '#2b1212',
+            color: '#fce7f3',
+          });
+
+          if (pushMode === undefined) return; // 取消
+
+          const usePush = pushMode === true; // confirm = true, deny = false
+
+          try {
+            const result = await new Promise((resolve, reject) => {
+              callAdminApi('manualFulfill', { rowIndex, pushMode: usePush ? 'auto' : 'manual' })
+                .then(resolve).catch(reject);
+            });
+
+            if (result.success) {
+              if (!usePush && result.manualMessage) {
+                // 手動複製模式 - 顯示可複製的彈窗
+                await Swal.fire({
+                  title: '✅ 發貨成功 - 請手動複製給客戶',
+                  html: `<textarea readonly style="width:100%;height:180px;background:#1a0f0f;color:#10b981;border:1px solid #065f46;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;resize:none;outline:none">${result.manualMessage}</textarea>`,
+                  confirmButtonText: '📋 複製並關閉',
+                  background: '#2b1212',
+                  color: '#fce7f3',
+                  didOpen: () => {
+                    const btn = Swal.getConfirmButton();
+                    btn.onclick = () => {
+                      navigator.clipboard.writeText(result.manualMessage).catch(() => {});
+                      Swal.close();
+                    };
+                  }
+                });
+              } else {
+                Swal.fire({ icon: 'success', title: '發貨成功', text: result.message, background: '#2b1212', color: '#fce7f3' });
+              }
+              refresh();
+            } else {
+              Swal.fire({ icon: 'error', title: '發貨失敗', text: result.message, background: '#2b1212', color: '#fce7f3' });
+            }
+          } catch(e) {
+            Swal.fire({ icon: 'error', title: '發貨失敗', text: e.message, background: '#2b1212', color: '#fce7f3' });
+          }
+        };
+
+        // Fix 2: 清除逾期未繳費訂單
+        const handleClearExpired = async () => {
+          const r = await Swal.fire({
+            title: '清除逾期訂單？',
+            html: '<p style="color:#a8a29e;font-size:13px">將把所有超過30分鐘且未付款的「待處理」訂單標記為「已取消」。<br/>此操作不可復原。</p>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '確認清除',
+            cancelButtonText: '取消',
+            background: '#2b1212',
+            color: '#fce7f3',
+          });
+          if (!r.isConfirmed) return;
+          try {
+            const result = await callAdminApi('clearExpiredOrders', {});
+            Swal.fire({ icon: 'success', title: `已清除 ${result.count} 筆逾期訂單`, background: '#2b1212', color: '#fce7f3' });
+            refresh();
+          } catch(e) {
+            Swal.fire({ icon: 'error', title: '清除失敗', text: e.message, background: '#2b1212', color: '#fce7f3' });
+          }
         };
 
         const handleAddStock = () => {
@@ -492,15 +569,21 @@
               <>
                 {activeTab === 'orders' && (
                   <div className="space-y-4">
-                    {data.orders.length === 0 ? <p className="text-center text-stone-500">目前沒有待處理訂單。</p> :
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs text-stone-500">共 {data.orders.length} 筆待處理</span>
+                      <button onClick={handleClearExpired} className="px-3 py-1 bg-red-900/60 hover:bg-red-800 text-red-300 border border-red-700 rounded text-xs font-bold transition">
+                        🗑️ 清除逾期訂單
+                      </button>
+                    </div>
+                    {data.orders.length === 0 ? <p className="text-center text-stone-500 py-6">目前沒有待處理訂單。</p> :
                       data.orders.map((ord, i) => (
-                        <div key={i} className="bg-black/30 p-3 rounded border border-wuxia-gold/20 flex justify-between items-center">
-                          <div>
-                            <p className="text-wuxia-gold font-bold text-sm">{ord.productName} <span className="text-stone-400 text-xs">(${ord.price})</span></p>
-                            <p className="text-xs text-stone-400">{ord.orderId} | {ord.userName}</p>
+                        <div key={i} className="bg-black/30 p-3 rounded border border-wuxia-gold/20 flex justify-between items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-wuxia-gold font-bold text-sm truncate">{ord.productName} <span className="text-stone-400 text-xs">(${ord.price})</span></p>
+                            <p className="text-xs text-stone-400 truncate">{ord.orderId} | {ord.userName}</p>
                             <p className="text-xs text-stone-500">{ord.date} | 備註: <span className="text-white">{ord.paymentNote || '無'}</span></p>
                           </div>
-                          <button onClick={() => handleFulfill(ord.rowIndex, ord.orderId)} className="bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-bold">強制發貨</button>
+                          <button onClick={() => handleFulfill(ord.rowIndex, ord.orderId, ord.userName)} className="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shrink-0">強制發貨</button>
                         </div>
                       ))
                     }
@@ -886,8 +969,8 @@
         const [isProcessing, setIsProcessing] = React.useState(false);
         const [activeCategory, setActiveCategory] = React.useState('全部');
         const [unreadCount, setUnreadCount] = React.useState(0);
-        // FIX #3: 商品格線欄數 (1-5)
-        const [gridCols, setGridCols] = React.useState(null); // null = auto/responsive
+        // 商品格線欄數：手機預設1欄(最多2)，桌面最多4欄
+        const [gridCols, setGridCols] = React.useState(1);
 
         React.useEffect(() => {
           setCartTotal(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0));
@@ -1069,11 +1152,15 @@
           setShowWallet(true);
         };
 
-        // FIX #3: 計算格線 class
+        // 格線 class：手機永遠最多2欄，預設1欄；桌面依滑軌最多4欄
         const getGridClass = (cols) => {
-          if (!cols) return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8';
-          const map = { 1:'grid grid-cols-1 gap-8', 2:'grid grid-cols-2 gap-6', 3:'grid grid-cols-3 gap-6', 4:'grid grid-cols-2 sm:grid-cols-4 gap-4', 5:'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3' };
-          return map[cols] || map[3];
+          const map = {
+            1: 'grid grid-cols-1 gap-6',
+            2: 'grid grid-cols-2 gap-5',
+            3: 'grid grid-cols-2 sm:grid-cols-3 gap-5',
+            4: 'grid grid-cols-2 sm:grid-cols-4 gap-4',
+          };
+          return map[cols] || map[1];
         };
 
         return (
@@ -1112,18 +1199,21 @@
                 ))}
               </div>
 
-              {/* FIX #3: 商品格線滑軌 */}
+              {/* 商品格線滑軌：1-4欄，手機最多顯示2欄 */}
               <div className="flex items-center justify-end gap-3 mb-6 px-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                <span className="text-xs text-stone-600 hidden sm:block">商品大小</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                 <input
-                  type="range" min="1" max="5" step="1"
-                  value={gridCols || 3}
+                  type="range" min="1" max="4" step="1"
+                  value={gridCols}
                   onChange={e => setGridCols(Number(e.target.value))}
-                  className="w-24 h-1.5 accent-wuxia-gold cursor-pointer"
+                  className="w-20 h-1.5 accent-wuxia-gold cursor-pointer"
                   title="調整一排顯示商品數"
                 />
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
-                <span className="text-xs text-stone-500 w-12">一排 {gridCols || '自動'} 個</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+                <span className="text-xs text-stone-500 w-10 text-right">
+                  {gridCols === 1 ? '大圖' : gridCols === 2 ? '兩欄' : gridCols === 3 ? '三欄' : '四欄'}
+                </span>
               </div>
 
               {error && <div className="bg-red-900/30 border border-red-800 text-red-300 p-4 rounded-lg text-center mb-6">{error}</div>}
@@ -1138,7 +1228,7 @@
                 ) : (
                   <div className={getGridClass(gridCols)}>
                     {filteredProducts.map(product => (
-                      <ProductCard key={product.id} product={product} onAdd={openAddToCart} colCount={gridCols || 3} />
+                      <ProductCard key={product.id} product={product} onAdd={openAddToCart} colCount={gridCols} />
                     ))}
                   </div>
                 )
