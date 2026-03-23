@@ -94,6 +94,12 @@
       
       const isGAS = typeof google !== 'undefined' && google.script;
 
+      // 分享資訊
+      const SHARE_INFO = {
+        lineUrl: 'https://lin.ee/7F09Iui',
+        message: '別錯過遊戲方程式的最新消息！快加入LINE好友獲得限定的優惠資訊。\n透過以下連結將官方帳號加入好友吧。\nhttps://lin.ee/7F09Iui'
+      };
+
       // ==========================================
       // 服務層 (Backend API)
       // ==========================================
@@ -249,7 +255,7 @@
         );
       };
 
-      const Navbar = ({ user, cartCount, unreadCount, onReport, onSuggest, onWallet, onProfile, onOpenCart, onLogin }) => {
+      const Navbar = ({ user, cartCount, unreadCount, onReport, onSuggest, onShare, onWallet, onProfile, onOpenCart, onLogin }) => {
         const isGuest = !user || user.userId === 'test-user';
         return (
           <nav className="fixed top-0 left-0 right-0 z-50 bg-[#180a0a]/95 backdrop-blur-sm border-b-2 border-wuxia-gold-dark shadow-lg shadow-black/50 h-20">
@@ -281,6 +287,7 @@
                 <div className="hidden sm:flex items-center gap-2">
                   <button onClick={onReport} className="px-3 py-1 text-xs border border-wuxia-red/50 text-wuxia-red hover:bg-wuxia-red hover:text-white transition rounded">回報</button>
                   <button onClick={onSuggest} className="px-3 py-1 text-xs border border-blue-500/50 text-blue-400 hover:bg-blue-600 hover:text-white transition rounded">功能建議</button>
+                  <button onClick={onShare} className="px-3 py-1 text-xs border border-[#06C755]/50 text-[#06C755] hover:bg-[#06C755] hover:text-white transition rounded">分享</button>
                 </div>
                 {!isGuest ? (
                   <button onClick={onProfile} className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l sm:border-wuxia-card hover:brightness-110 transition">
@@ -386,6 +393,117 @@
                 <button onClick={handleSave} className="w-full py-2 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold mt-4">儲存變更</button>
               </div>
             )}
+          </Modal>
+        );
+      };
+
+      // Fix 3: 分享好友 Modal
+      const ShareModal = ({ isOpen, onClose, user }) => {
+        const [copied, setCopied] = React.useState(false);
+
+        const handleCopy = () => {
+          navigator.clipboard.writeText(SHARE_INFO.message).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }).catch(() => {
+            // fallback
+            const el = document.createElement('textarea');
+            el.value = SHARE_INFO.message;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          });
+        };
+
+        const handleShareLiff = async () => {
+          if (window.liff && window.liff.isInClient()) {
+            try {
+              // 使用 LIFF shareTargetPicker 彈出好友選擇器
+              const result = await window.liff.shareTargetPicker([{
+                type: 'text',
+                text: SHARE_INFO.message
+              }]);
+              if (result) {
+                Swal.fire({ toast:true, position:'top-end', icon:'success', title:'分享成功！', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
+                onClose();
+              }
+            } catch(e) {
+              // shareTargetPicker 不支援時退回複製
+              handleCopy();
+              Swal.fire({ toast:true, position:'top-end', icon:'info', title:'已複製訊息，請手動貼上分享', timer:2500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
+            }
+          } else {
+            // 非 LIFF 環境，使用 Web Share API 或複製
+            if (navigator.share) {
+              try {
+                await navigator.share({ title:'遊戲方程式', text: SHARE_INFO.message, url: SHARE_INFO.lineUrl });
+              } catch(e) { handleCopy(); }
+            } else {
+              handleCopy();
+              Swal.fire({ toast:true, position:'top-end', icon:'info', title:'已複製訊息', timer:1500, showConfirmButton:false, background:'#2b1212', color:'#fff' });
+            }
+          }
+        };
+
+        return (
+          <Modal isOpen={isOpen} title="📢 分享給好友" onClose={onClose}>
+            <div className="space-y-5">
+              {/* 預覽卡片 */}
+              <div className="bg-gradient-to-br from-[#06C755]/10 to-black border border-[#06C755]/30 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-[#06C755] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.045 2 11.1c0 2.7 1.15 5.12 2.99 6.84L4 22l4.27-2.24A10.7 10.7 0 0012 20.2c5.523 0 10-4.045 10-9.1S17.523 2 12 2z"/></svg>
+                  </div>
+                  <div>
+                    <p className="text-[#06C755] font-bold text-sm">遊戲方程式 官方帳號</p>
+                    <p className="text-stone-500 text-[10px]">LINE Official Account</p>
+                  </div>
+                </div>
+                <div className="bg-black/40 rounded p-3 border border-stone-700">
+                  <p className="text-stone-300 text-sm leading-relaxed whitespace-pre-line">{SHARE_INFO.message}</p>
+                </div>
+              </div>
+
+              {/* 操作按鈕 */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* 複製訊息 */}
+                <button
+                  onClick={handleCopy}
+                  className={`flex flex-col items-center justify-center gap-2 py-4 rounded-lg border transition-all duration-200 ${copied ? 'bg-wuxia-jade/20 border-wuxia-jade text-wuxia-jade' : 'bg-black/30 border-stone-700 text-stone-300 hover:border-stone-500 hover:bg-black/50'}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  <span className="text-xs font-bold">{copied ? '✓ 已複製！' : '複製訊息'}</span>
+                </button>
+
+                {/* 選擇好友分享 */}
+                <button
+                  onClick={handleShareLiff}
+                  className="flex flex-col items-center justify-center gap-2 py-4 rounded-lg border border-[#06C755]/50 bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-all duration-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="text-xs font-bold">選擇好友分享</span>
+                </button>
+              </div>
+
+              {/* LINE 加好友連結 */}
+              <div className="flex items-center gap-3 bg-black/30 border border-stone-700 rounded-lg p-3">
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-[10px] text-stone-500 mb-0.5">加好友連結</p>
+                  <p className="text-wuxia-gold text-xs font-mono truncate">{SHARE_INFO.lineUrl}</p>
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(SHARE_INFO.lineUrl); Swal.fire({ toast:true, position:'top-end', icon:'success', title:'連結已複製', timer:1200, showConfirmButton:false, background:'#2b1212', color:'#fff' }); }}
+                  className="text-xs bg-stone-700 hover:bg-stone-600 text-stone-300 px-3 py-1.5 rounded transition shrink-0"
+                >
+                  複製連結
+                </button>
+              </div>
+
+              <p className="text-center text-[10px] text-stone-600">分享好友，一起享受自動發貨的便利！</p>
+            </div>
           </Modal>
         );
       };
@@ -604,18 +722,34 @@
                       </div>
                     </div>
                     <div className="space-y-2 h-64 overflow-y-auto pr-2">
-                      {data.inventory.map((inv, i) => (
-                        <div key={i} className="flex justify-between items-center bg-black/20 p-2 rounded border border-stone-800">
-                          <div className="overflow-hidden">
-                            <p className="text-stone-300 text-xs font-bold truncate">{inv.productName}</p>
-                            <p className="text-[10px] text-stone-500 font-mono">Code: {inv.code} / Pass: {inv.password || 'N/A'}</p>
+                      {data.inventory.map((inv, i) => {
+                        const isSold = inv.status === 'Sold' || inv.status === '已售出';
+                        const isAvail = inv.status === 'Available' || inv.status === '可用';
+                        return (
+                          <div key={i} className={`bg-black/20 p-2 rounded border ${isSold ? 'border-red-900/50' : 'border-stone-800'}`}>
+                            <div className="flex justify-between items-start">
+                              <div className="overflow-hidden flex-1">
+                                <p className="text-stone-300 text-xs font-bold truncate">{inv.productName}</p>
+                                <p className="text-[10px] text-stone-500 font-mono">卡號: {inv.code} {inv.password ? `/ 密碼: ${inv.password}` : ''}</p>
+                                {/* Fix 4: 已售出顯示訂單編號與購買人 */}
+                                {isSold && inv.soldOrderId && (
+                                  <p className="text-[10px] text-red-400 mt-0.5">
+                                    📦 {inv.soldOrderId} | 👤 {inv.soldUserName} | {inv.soldDate}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isAvail ? 'bg-green-900/60 text-green-300 border border-green-700' : 'bg-red-900/60 text-red-300 border border-red-700'}`}>
+                                  {isAvail ? '可用' : '已售'}
+                                </span>
+                                {isAvail && (
+                                  <button onClick={() => handleDeleteStock(inv.rowIndex)} className="text-red-500 hover:text-red-300 text-xs border border-red-900 px-2 rounded">刪</button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`text-[10px] px-1 rounded ${inv.status==='Available'?'bg-green-900 text-green-300':'bg-red-900 text-red-300'}`}>{inv.status}</span>
-                            <button onClick={() => handleDeleteStock(inv.rowIndex)} className="text-red-500 hover:text-red-300 text-xs border border-red-900 px-2 rounded">刪</button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -961,11 +1095,12 @@
         const [currentOrderId, setCurrentOrderId] = React.useState(null);
         const [currentOrderPrice, setCurrentOrderPrice] = React.useState(0);
         const [showReport, setShowReport] = React.useState(false);
-        const [reportInitType, setReportInitType] = React.useState('充值問題'); // 保留初始類型
+        const [reportInitType, setReportInitType] = React.useState('充值問題');
         const [showWallet, setShowWallet] = React.useState(false);
         const [showAdmin, setShowAdmin] = React.useState(false);
         const [showGuide, setShowGuide] = React.useState(false);
         const [showProfile, setShowProfile] = React.useState(false);
+        const [showShare, setShowShare] = React.useState(false); // Fix 3
         const [isProcessing, setIsProcessing] = React.useState(false);
         const [activeCategory, setActiveCategory] = React.useState('全部');
         const [unreadCount, setUnreadCount] = React.useState(0);
@@ -1171,6 +1306,7 @@
               unreadCount={unreadCount}
               onReport={() => { setReportInitType('充值問題'); setShowReport(true); }}
               onSuggest={() => { setReportInitType('功能建議'); setShowReport(true); }}
+              onShare={() => setShowShare(true)}
               onWallet={handleOpenWallet}
               onProfile={() => setShowProfile(true)}
               onOpenCart={() => setShowCart(true)}
@@ -1189,6 +1325,7 @@
                   {user && user.userId !== 'test-user' && <button onClick={handleOpenWallet} className="text-xs text-wuxia-gold underline">我的票券夾</button>}
                   <button onClick={() => { setReportInitType('充值問題'); setShowReport(true); }} className="text-xs text-wuxia-red underline">遇到問題？</button>
                   <button onClick={() => { setReportInitType('功能建議'); setShowReport(true); }} className="text-xs text-blue-400 underline">功能建議</button>
+                  <button onClick={() => setShowShare(true)} className="text-xs text-[#06C755] underline">分享好友</button>
                 </div>
               </div>
 
@@ -1358,6 +1495,7 @@
               onArchiveOrder={handleArchiveOrder}
             />
             <ProfileModal isOpen={showProfile} user={user} onClose={() => setShowProfile(false)} />
+            <ShareModal isOpen={showShare} user={user} onClose={() => setShowShare(false)} />
             {showAdmin && <AdminModal isOpen={showAdmin} onClose={() => setShowAdmin(false)} />}
             {showGuide && <GuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />}
           </div>
