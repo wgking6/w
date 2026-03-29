@@ -416,7 +416,7 @@
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="font-bold text-xl text-transparent bg-clip-text bg-gradient-to-r from-wuxia-gold via-yellow-200 to-wuxia-gold tracking-wider drop-shadow-sm">遊戲方程式</span>
-              <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 3.1</span>
+              <span className="text-[10px] bg-wuxia-gold/20 text-wuxia-gold border border-wuxia-gold/50 px-1 rounded font-mono">Ver 2.8</span>
             </div>
             <span className="text-[10px] text-red-400 font-mono uppercase tracking-[0.2em]">Game Equation</span>
           </div>
@@ -1288,106 +1288,106 @@
         };
 
         const submitOrder = async () => {
-   if (cart.length === 0) return;
-   if (!user || user.userId === 'test-user') {
-      Swal.fire({ 
-         icon: 'info', 
-         title: '請先登入', 
-         showCancelButton: true, 
-         confirmButtonText: 'LINE 登入' 
-      }).then((r) => { if (r.isConfirmed) loginWithLiffUrl(); });
-      return;
-   }
-   
-   if (paymentMethod === 'mycard') {
-      if (!myCardNumber.trim() || !myCardPassword.trim()) {
-         Swal.fire({ icon: 'warning', title: '請輸入卡號與密碼', background: '#2b1212', color: '#fff' });
-         return;
-      }
-      setIsProcessing(true);
-      try {
-         const productNames = cart.map(item => `${item.product.name} x${item.quantity}`).join(', ');
-         let result;
-         if (isGAS) {
-            result = await new Promise((resolve, reject) => {
-               google.script.run
-                  .withSuccessHandler(resolve)
-                  .withFailureHandler(reject)
-                  .submitPointCardOrder({
-                     userId: user.userId,
-                     displayName: user.displayName,
-                     productNames: productNames,
-                     totalAmount: cartTotal,
-                     cardNumber: myCardNumber,
-                     cardPassword: myCardPassword
-                  });
-            });
-         } else {
-            result = await fetch(GAS_API_URL, {
-               method: 'POST',
-               redirect: 'follow',
-               headers: { "Content-Type": "text/plain;charset=utf-8" },
-               body: JSON.stringify({
-                  action: 'submitPointCardOrder',
-                  userId: user.userId,
-                  displayName: user.displayName,
-                  productNames: productNames,
-                  totalAmount: cartTotal,
-                  cardNumber: myCardNumber,
-                  cardPassword: myCardPassword
-               })
-            }).then(res => res.json());
-         }
+           if (cart.length === 0) return;
+           if (!user || user.userId === 'test-user') {
+              Swal.fire({ 
+                 icon: 'info', 
+                 title: '請先登入', 
+                 showCancelButton: true, 
+                 confirmButtonText: 'LINE 登入' 
+              }).then((r) => { if (r.isConfirmed) loginWithLiffUrl(); });
+              return;
+           }
+           
+           if (paymentMethod === 'mycard') {
+              if (!myCardNumber.trim() || !myCardPassword.trim()) {
+                 Swal.fire({ icon: 'warning', title: '請輸入卡號與密碼', background: '#2b1212', color: '#fff' });
+                 return;
+              }
+              setIsProcessing(true);
+              try {
+                 const productNames = cart.map(item => `${item.product.name} x${item.quantity}`).join(', ');
+                 let result;
+                 if (isGAS) {
+                    result = await new Promise((resolve, reject) => {
+                       google.script.run
+                          .withSuccessHandler(resolve)
+                          .withFailureHandler(reject)
+                          .submitPointCardOrder({
+                             userId: user.userId,
+                             displayName: user.displayName,
+                             productNames: productNames,
+                             totalAmount: cartTotal,
+                             cardNumber: myCardNumber,
+                             cardPassword: myCardPassword
+                          });
+                    });
+                 } else {
+                    result = await fetch(GAS_API_URL, {
+                       method: 'POST',
+                       redirect: 'follow',
+                       headers: { "Content-Type": "text/plain;charset=utf-8" },
+                       body: JSON.stringify({
+                          action: 'submitPointCardOrder',
+                          userId: user.userId,
+                          displayName: user.displayName,
+                          productNames: productNames,
+                          totalAmount: cartTotal,
+                          cardNumber: myCardNumber,
+                          cardPassword: myCardPassword
+                       })
+                    }).then(res => res.json());
+                 }
 
-         if (result.success) {
-            if (window.liff && window.liff.isInClient()) {
-               let messageText = `【點數卡兌換訂單已提交】\n`;
-               messageText += `━━━━━━━━━━━━━━━\n`;
-               messageText += `🎮 兌換商品:\n${productNames}\n`;
-               messageText += `💳 支付方式: MyCard 點數\n`;
-               messageText += `\n⏰ 訂單已進入人工審核流程\n`;
-               messageText += `🎁 審核通過後，系統將自動發送商品到您的票券夾`;
-               
-               try {
-                 await window.liff.sendMessages([{ type: 'text', text: messageText }]);
-               } catch (msgErr) { 
-                 console.error("Line訊息發送錯誤:", msgErr); 
-               }
-            }
+                 if (result.success) {
+                    if (window.liff && window.liff.isInClient()) {
+                       let messageText = `【點數卡兌換訂單已提交】\n`;
+                       messageText += `━━━━━━━━━━━━━━━\n`;
+                       messageText += `🎮 兌換商品:\n${productNames}\n`;
+                       messageText += `💳 支付方式: MyCard 點數\n`;
+                       messageText += `\n⏰ 訂單已進入人工審核流程\n`;
+                       messageText += `🎁 審核通過後，系統將自動發送商品到您的票券夾`;
+                       
+                       try {
+                         await window.liff.sendMessages([{ type: 'text', text: messageText }]);
+                       } catch (msgErr) { 
+                         console.error("Line訊息發送錯誤:", msgErr); 
+                       }
+                    }
 
-            Swal.fire({ icon: 'success', title: '訂單已提交', text: result.message, background: '#2b1212', color: '#fff' });
-            setCart([]);
-            setShowCart(false);
-            setMyCardNumber('');
-            setMyCardPassword('');
-            setPaymentMethod('bank');
-         } else {
-            Swal.fire({ icon: 'error', title: '提交失敗', text: result.message, background: '#2b1212', color: '#fff' });
-         }
-      } catch (err) {
-         console.error("MyCard Order Error:", err);
-         Swal.fire({ icon: 'error', title: '系統繁忙', text: err.message, background: '#2b1212', color: '#fff' });
-      } finally {
-         setIsProcessing(false);
-      }
-      return;
-   }
-   
-   setIsProcessing(true);
-   
-   try {
-     const result = await withTimeout(
-        processCartOrderBackend({ 
-           userId: user.userId, 
-           displayName: user.displayName 
-        }, "", cart), 
-        30000
-     );
-     
-     if (result.success) {
-       // ★ 改進: 更完整詳細的LINE訊息
-       if (window.liff && window.liff.isInClient()) {
-         let messageText = `【訂單已成立】\n`;
+                    Swal.fire({ icon: 'success', title: '訂單已提交', text: result.message, background: '#2b1212', color: '#fff' });
+                    setCart([]);
+                    setShowCart(false);
+                    setMyCardNumber('');
+                    setMyCardPassword('');
+                    setPaymentMethod('bank');
+                 } else {
+                    Swal.fire({ icon: 'error', title: '提交失敗', text: result.message, background: '#2b1212', color: '#fff' });
+                 }
+              } catch (err) {
+                 console.error("MyCard Order Error:", err);
+                 Swal.fire({ icon: 'error', title: '系統繁忙', text: err.message, background: '#2b1212', color: '#fff' });
+              } finally {
+                 setIsProcessing(false);
+              }
+              return;
+           }
+           
+           setIsProcessing(true);
+           
+           try {
+             const result = await withTimeout(
+                processCartOrderBackend({ 
+                   userId: user.userId, 
+                   displayName: user.displayName 
+                }, "", cart), 
+                30000
+             );
+             
+             if (result.success) {
+               // ★ 改進: 更完整詳細的LINE訊息
+               if (window.liff && window.liff.isInClient()) {
+                 let messageText = `【訂單已成立】\n`;
          messageText += `━━━━━━━━━━━━━━━\n`;
          messageText += `📝 訂單編號: ${result.orderId}\n`;
          messageText += `💰 訂單金額: $${cartTotal}\n`;
