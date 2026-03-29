@@ -1574,35 +1574,33 @@
                      ))}
                      <div className="border-t border-white/10 pt-4 mt-4 flex justify-between items-end"><span className="text-stone-400">總金額</span><span className="text-3xl text-wuxia-gold font-mono font-bold">${cartTotal}</span></div>
                      
-                     {cart.some(item => item.product.name.includes('新武林同萌傳輔助') && item.product.name.includes('30天月卡')) && (
-                        <div className="mt-4 space-y-3">
-                           <label className="block text-sm font-bold text-wuxia-gold">付款方式</label>
-                           <div className="flex gap-4">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                 <input type="radio" name="paymentMethod" value="bank" checked={paymentMethod === 'bank'} onChange={(e) => setPaymentMethod(e.target.value)} className="text-wuxia-red focus:ring-wuxia-red bg-stone-900 border-stone-700" />
-                                 <span className="text-stone-300 text-sm">銀行轉帳</span>
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                 <input type="radio" name="paymentMethod" value="mycard" checked={paymentMethod === 'mycard'} onChange={(e) => setPaymentMethod(e.target.value)} className="text-wuxia-red focus:ring-wuxia-red bg-stone-900 border-stone-700" />
-                                 <span className="text-stone-300 text-sm">MyCard 點數支付 (需300點)</span>
-                              </label>
-                           </div>
-                           
-                           {paymentMethod === 'mycard' && (
-                              <div className="space-y-3 bg-black/40 p-4 rounded border border-stone-800 mt-2">
-                                 <p className="text-xs text-stone-400 mb-2">請輸入 300 點 MyCard 卡號與密碼，我們將進行人工審核發卡。</p>
-                                 <div>
-                                    <label className="block text-xs text-stone-400 mb-1">MyCard 卡號</label>
-                                    <input type="text" value={myCardNumber} onChange={(e) => setMyCardNumber(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-white text-sm focus:border-wuxia-gold focus:outline-none" placeholder="輸入卡號" />
-                                 </div>
-                                 <div>
-                                    <label className="block text-xs text-stone-400 mb-1">MyCard 密碼</label>
-                                    <input type="text" value={myCardPassword} onChange={(e) => setMyCardPassword(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-white text-sm focus:border-wuxia-gold focus:outline-none" placeholder="輸入密碼" />
-                                 </div>
-                              </div>
-                           )}
+                     <div className="mt-4 space-y-3">
+                        <label className="block text-sm font-bold text-wuxia-gold">付款方式</label>
+                        <div className="flex gap-4">
+                           <label className="flex items-center gap-2 cursor-pointer">
+                              <input type="radio" name="paymentMethod" value="bank" checked={paymentMethod === 'bank'} onChange={(e) => setPaymentMethod(e.target.value)} className="text-wuxia-red focus:ring-wuxia-red bg-stone-900 border-stone-700" />
+                              <span className="text-stone-300 text-sm">銀行轉帳</span>
+                           </label>
+                           <label className="flex items-center gap-2 cursor-pointer">
+                              <input type="radio" name="paymentMethod" value="mycard" checked={paymentMethod === 'mycard'} onChange={(e) => setPaymentMethod(e.target.value)} className="text-wuxia-red focus:ring-wuxia-red bg-stone-900 border-stone-700" />
+                              <span className="text-stone-300 text-sm">MyCard 點數支付</span>
+                           </label>
                         </div>
-                     )}
+                        
+                        {paymentMethod === 'mycard' && (
+                           <div className="space-y-3 bg-black/40 p-4 rounded border border-stone-800 mt-2">
+                              <p className="text-xs text-stone-400 mb-2">請輸入對應面額的 MyCard 卡號與密碼，我們將進行人工審核發卡。</p>
+                              <div>
+                                 <label className="block text-xs text-stone-400 mb-1">MyCard 卡號</label>
+                                 <input type="text" value={myCardNumber} onChange={(e) => setMyCardNumber(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-white text-sm focus:border-wuxia-gold focus:outline-none" placeholder="輸入卡號" />
+                              </div>
+                              <div>
+                                 <label className="block text-xs text-stone-400 mb-1">MyCard 密碼</label>
+                                 <input type="text" value={myCardPassword} onChange={(e) => setMyCardPassword(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-white text-sm focus:border-wuxia-gold focus:outline-none" placeholder="輸入密碼" />
+                              </div>
+                           </div>
+                        )}
+                     </div>
 
                      <button onClick={submitOrder} disabled={isProcessing} className="w-full mt-4 py-3 bg-gradient-to-r from-wuxia-red to-wuxia-red-dark text-white rounded font-bold shadow-lg hover:shadow-wuxia-red/30 transition">{isProcessing ? '處理中...' : (paymentMethod === 'mycard' ? '提交點數卡兌換' : '提交訂單 (前往付款)')}</button>
                      {paymentMethod === 'bank' && <p className="text-xs text-red-400 mt-2 text-center animate-pulse">⚠️ 提醒：提交訂單後請於 30 分鐘內完成轉帳，以免訂單失效或與他人撞單導致不發貨！</p>}
