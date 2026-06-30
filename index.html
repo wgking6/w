@@ -745,29 +745,25 @@
         );
       };
 
+
       const AdminModal = ({ isOpen, onClose }) => {
-        const [activeTab, setActiveTab]   = React.useState('orders');
-        const [data, setData]             = React.useState(null);
-        const [loading, setLoading]       = React.useState(false);
-        const [refreshKey, setRefreshKey] = React.useState(0);
-        // 庫存
-        const [invProdId, setInvProdId] = React.useState('');
-        const [invCode,   setInvCode]   = React.useState('');
-        const [invPass,   setInvPass]   = React.useState('');
+        const [activeTab,   setActiveTab]   = React.useState('orders');
+        const [data,        setData]        = React.useState(null);
+        const [loading,     setLoading]     = React.useState(false);
+        const [refreshKey,  setRefreshKey]  = React.useState(0);
+        const [invProdId,   setInvProdId]   = React.useState('');
+        const [invCode,     setInvCode]     = React.useState('');
+        const [invPass,     setInvPass]     = React.useState('');
         const [batchText,   setBatchText]   = React.useState('');
         const [batchProdId, setBatchProdId] = React.useState('');
         const [showBatch,   setShowBatch]   = React.useState(false);
-        // 問題回報
         const [selectedIssue, setSelectedIssue] = React.useState(null);
         const [replyText,     setReplyText]     = React.useState('');
-        // 黑名單
         const [blUserId,   setBlUserId]   = React.useState('');
         const [blUserName, setBlUserName] = React.useState('');
         const [blReason,   setBlReason]   = React.useState('');
-        // 商品管理
         const [editProduct, setEditProduct] = React.useState(null);
         const [prodForm, setProdForm] = React.useState({ id:'', name:'', desc:'', price:'', imageUrl:'', category:'電腦遊戲' });
-        // 銀行帳戶
         const [bankForm, setBankForm] = React.useState({ alias:'', code:'', bankName:'', account:'', email:'', enabled:true, rowIndex:null });
         const [editBank, setEditBank] = React.useState(false);
 
@@ -783,17 +779,14 @@
 
         const refresh = () => setRefreshKey(k => k + 1);
 
-        // 強制發貨
         const handleFulfill = async (rowIndex, orderId, userName) => {
           const r = await Swal.fire({
             title: '強制發貨',
-            html: '<div style="text-align:left;font-size:13px;color:#d6d3d1"><p style="margin-bottom:8px">單號：<b style="color:#fbbf24">'
-                  + orderId + '</b></p><p style="margin-bottom:12px">客戶：' + userName
-                  + '</p><p style="color:#a8a29e">請選擇發貨通知方式：</p></div>',
+            html: '<div style="text-align:left;font-size:13px;color:#d6d3d1">'
+                + '<p style="margin-bottom:8px">單號：<b style="color:#fbbf24">' + orderId + '</b></p>'
+                + '<p>客戶：' + userName + '</p></div>',
             icon: 'question', showCancelButton: true, showDenyButton: true,
-            confirmButtonText: '🤖 自動推播 (LINE Bot)',
-            denyButtonText:    '📋 手動複製 (複製卡密)',
-            cancelButtonText:  '取消',
+            confirmButtonText: '🤖 自動推播', denyButtonText: '📋 手動複製', cancelButtonText: '取消',
             confirmButtonColor: '#16a34a', denyButtonColor: '#1d4ed8',
             background: '#2b1212', color: '#fce7f3',
           });
@@ -805,14 +798,13 @@
               if (pushMode === 'manual' && result.manualMessage) {
                 await Swal.fire({
                   title: '✅ 發貨成功 — 請複製給客戶',
-                  html: '<textarea readonly style="width:100%;height:180px;background:#1a0f0f;color:#10b981;border:1px solid #065f46;border-radius:6px;padding:10px;font-family:monospace;font-size:12px;resize:none">'
-                        + result.manualMessage.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-                        + '</textarea>',
-                  confirmButtonText: '📋 複製並關閉',
-                  background: '#2b1212', color: '#fce7f3',
+                  html: '<textarea readonly style="width:100%;height:180px;background:#1a0f0f;color:#10b981;'
+                      + 'border:1px solid #065f46;border-radius:6px;padding:10px;font-family:monospace;'
+                      + 'font-size:12px;resize:none">' + result.manualMessage.replace(/</g,'&lt;') + '</textarea>',
+                  confirmButtonText: '📋 複製並關閉', background: '#2b1212', color: '#fce7f3',
                   didOpen: () => {
                     Swal.getConfirmButton().onclick = () => {
-                      navigator.clipboard.writeText(result.manualMessage).catch(()=>{});
+                      navigator.clipboard.writeText(result.manualMessage).catch(() => {});
                       Swal.close();
                     };
                   }
@@ -829,47 +821,35 @@
           }
         };
 
-        // 清除逾期訂單
         const handleClearExpired = async () => {
-          const r = await Swal.fire({
-            title: '清除逾期訂單？',
-            html: '<p style="color:#a8a29e;font-size:13px">將把超過30分鐘未付款的待處理訂單標記為已取消。</p>',
-            icon:'warning', showCancelButton:true, confirmButtonText:'確認清除', cancelButtonText:'取消',
-            background:'#2b1212', color:'#fce7f3',
-          });
+          const r = await Swal.fire({ title:'清除逾期訂單？', html:'<p style="color:#a8a29e;font-size:13px">超過30分鐘未付款的待處理訂單將標記為已取消。</p>', icon:'warning', showCancelButton:true, confirmButtonText:'確認清除', cancelButtonText:'取消', background:'#2b1212', color:'#fce7f3' });
           if (!r.isConfirmed) return;
           try {
             const result = await callAdminApi('clearExpiredOrders', {});
             Swal.fire({ icon:'success', title:'已清除 ' + result.count + ' 筆逾期訂單', background:'#2b1212', color:'#fce7f3' });
             refresh();
-          } catch(e) {
-            Swal.fire({ icon:'error', title:'清除失敗', text: e.message, background:'#2b1212', color:'#fce7f3' });
-          }
+          } catch(e) { Swal.fire({ icon:'error', title:'清除失敗', text: e.message, background:'#2b1212', color:'#fce7f3' }); }
         };
 
-        // 庫存操作
         const handleAddStock = () => {
           if (!invProdId || !invCode) return Swal.fire('欄位不足','請選擇商品並輸入卡號','warning');
           setLoading(true);
           callAdminApi('addInventory', { productId: invProdId, items: [{ code: invCode, pass: invPass }] })
             .then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'庫存已新增',timer:1500,showConfirmButton:false,background:'#2b1212',color:'#fff'}); setInvCode(''); setInvPass(''); refresh(); })
-            .catch(e => Swal.fire('失敗', e.message, 'error'))
-            .finally(() => setLoading(false));
+            .catch(e => Swal.fire('失敗', e.message, 'error')).finally(() => setLoading(false));
         };
         const handleBatchAdd = () => {
           if (!batchProdId || !batchText.trim()) return Swal.fire('欄位不足','請選擇商品並輸入卡號列表','warning');
           setLoading(true);
           callAdminApi('batchAddInventory', { productId: batchProdId, lines: batchText })
             .then(res => { Swal.fire({icon:'success',title:'批次新增完成',html:'<p>成功：<b>' + res.added + '</b> 筆，略過：' + res.skipped + ' 筆</p>',background:'#2b1212',color:'#fce7f3'}); setBatchText(''); setShowBatch(false); refresh(); })
-            .catch(e => Swal.fire('失敗', e.message, 'error'))
-            .finally(() => setLoading(false));
+            .catch(e => Swal.fire('失敗', e.message, 'error')).finally(() => setLoading(false));
         };
         const handleDeleteStock = (rowIndex) => {
           if (!confirm('確定刪除此庫存？')) return;
           callAdminApi('deleteInventory', { rowIndex }).then(refresh);
         };
 
-        // 問題回報
         const handleReplyIssue = () => {
           if (!replyText.trim() || !selectedIssue) return;
           callAdminApi('replyIssue', { rowIndex: selectedIssue.rowIndex, reply: replyText })
@@ -877,7 +857,6 @@
             .catch(e => Swal.fire('失敗', e.message, 'error'));
         };
 
-        // 黑名單
         const handleAddBlacklist = () => {
           if (!blUserId.trim()) return Swal.fire('請輸入 User ID','','warning');
           callAdminApi('addBlacklist', { userId: blUserId.trim(), userName: blUserName.trim(), reason: blReason.trim() })
@@ -885,47 +864,45 @@
             .catch(e => Swal.fire('失敗', e.message, 'error'));
         };
         const handleRemoveBlacklist = (rowIndex, uname) => {
-          Swal.fire({title:'移除 ' + uname + '？',icon:'question',showCancelButton:true,confirmButtonText:'確定移除',cancelButtonText:'取消',background:'#2b1212',color:'#fce7f3'})
-            .then(r => { if (r.isConfirmed) callAdminApi('removeBlacklist',{rowIndex}).then(()=>{ Swal.fire({toast:true,position:'top-end',icon:'success',title:'已移除',timer:1200,showConfirmButton:false}); refresh(); }); });
+          Swal.fire({ title:'移除 ' + uname + '？', icon:'question', showCancelButton:true, confirmButtonText:'確定移除', cancelButtonText:'取消', background:'#2b1212', color:'#fce7f3' })
+            .then(r => { if (r.isConfirmed) callAdminApi('removeBlacklist', { rowIndex }).then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'已移除',timer:1200,showConfirmButton:false}); refresh(); }); });
         };
 
-        // 商品管理
-        const openEditProduct = (prod) => { setProdForm({id:prod.id,name:prod.name,desc:prod.desc||'',price:String(prod.price),imageUrl:prod.imageUrl||'',category:prod.category||'電腦遊戲',rowIndex:prod.rowIndex}); setEditProduct(prod); };
-        const openNewProduct  = () => { setProdForm({id:'',name:'',desc:'',price:'',imageUrl:'',category:'電腦遊戲'}); setEditProduct({}); };
+        const openEditProduct = (prod) => { setProdForm({ id:prod.id, name:prod.name, desc:prod.desc||'', price:String(prod.price), imageUrl:prod.imageUrl||'', category:prod.category||'電腦遊戲', rowIndex:prod.rowIndex }); setEditProduct(prod); };
+        const openNewProduct  = () => { setProdForm({ id:'', name:'', desc:'', price:'', imageUrl:'', category:'電腦遊戲' }); setEditProduct({}); };
         const handleSaveProduct = () => {
           if (!prodForm.name.trim() || !prodForm.price) return Swal.fire('欄位不足','請填寫商品名稱與價格','warning');
           setLoading(true);
-          callAdminApi('saveProduct', {...prodForm, price: Number(prodForm.price)})
+          callAdminApi('saveProduct', { ...prodForm, price: Number(prodForm.price) })
             .then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'商品已儲存',timer:1500,showConfirmButton:false,background:'#2b1212',color:'#fff'}); setEditProduct(null); refresh(); })
             .catch(e => Swal.fire('失敗', e.message, 'error')).finally(() => setLoading(false));
         };
         const handleToggleStatus = (prod) => {
           const label = prod.status === '上架' ? '下架' : '上架';
-          Swal.fire({title:'確定' + label + '「' + prod.name + '」？',icon:'question',showCancelButton:true,confirmButtonText:'確定' + label,cancelButtonText:'取消',background:'#2b1212',color:'#fce7f3'})
-            .then(r => { if (r.isConfirmed) callAdminApi('toggleProductStatus',{rowIndex:prod.rowIndex,currentStatus:prod.status}).then(()=>{ Swal.fire({toast:true,position:'top-end',icon:'success',title:'已' + label,timer:1200,showConfirmButton:false}); refresh(); }); });
+          Swal.fire({ title:'確定' + label + '「' + prod.name + '」？', icon:'question', showCancelButton:true, confirmButtonText:'確定' + label, cancelButtonText:'取消', background:'#2b1212', color:'#fce7f3' })
+            .then(r => { if (r.isConfirmed) callAdminApi('toggleProductStatus', { rowIndex:prod.rowIndex, currentStatus:prod.status }).then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'已' + label,timer:1200,showConfirmButton:false}); refresh(); }); });
         };
 
-        // 銀行帳戶
         const handleSaveBank = () => {
           if (!bankForm.alias || !bankForm.account) return Swal.fire('欄位不足','請填寫別名與帳號','warning');
           setLoading(true);
           callAdminApi('saveBankAccount', bankForm)
-            .then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'帳戶已儲存',timer:1500,showConfirmButton:false,background:'#2b1212',color:'#fff'}); setBankForm({alias:'',code:'',bankName:'',account:'',email:'',enabled:true,rowIndex:null}); setEditBank(false); refresh(); })
+            .then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'帳戶已儲存',timer:1500,showConfirmButton:false,background:'#2b1212',color:'#fff'}); setBankForm({ alias:'', code:'', bankName:'', account:'', email:'', enabled:true, rowIndex:null }); setEditBank(false); refresh(); })
             .catch(e => Swal.fire('失敗', e.message, 'error')).finally(() => setLoading(false));
         };
         const handleDeleteBank = (rowIndex, alias) => {
-          Swal.fire({title:'刪除「' + alias + '」？',icon:'warning',showCancelButton:true,confirmButtonText:'確定刪除',cancelButtonText:'取消',background:'#2b1212',color:'#fce7f3'})
-            .then(r => { if (r.isConfirmed) callAdminApi('deleteBankAccount',{rowIndex}).then(()=>{ Swal.fire({toast:true,position:'top-end',icon:'success',title:'已刪除',timer:1200,showConfirmButton:false}); refresh(); }); });
+          Swal.fire({ title:'刪除「' + alias + '」？', icon:'warning', showCancelButton:true, confirmButtonText:'確定刪除', cancelButtonText:'取消', background:'#2b1212', color:'#fce7f3' })
+            .then(r => { if (r.isConfirmed) callAdminApi('deleteBankAccount', { rowIndex }).then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title:'已刪除',timer:1200,showConfirmButton:false}); refresh(); }); });
         };
 
         const TABS = [
-          { id:'orders',    label:'📜 訂單'    },
-          { id:'inventory', label:'📦 庫存'    },
-          { id:'products',  label:'🏷️ 商品'   },
-          { id:'blacklist', label:'🛑 黑名單'  },
-          { id:'banks',     label:'💳 收款帳戶' },
-          { id:'issues',    label:'📮 問題'    },
-          { id:'users',     label:'👥 用戶'    },
+          { id:'orders',    label:'📜 訂單'     },
+          { id:'inventory', label:'📦 庫存'     },
+          { id:'products',  label:'🏷️ 商品'    },
+          { id:'blacklist', label:'🛑 黑名單'   },
+          { id:'banks',     label:'💳 收款帳戶'  },
+          { id:'issues',    label:'📮 問題'     },
+          { id:'users',     label:'👥 用戶'     },
         ];
 
         return (
@@ -933,7 +910,7 @@
             <div className="flex gap-1.5 mb-4 border-b border-stone-700 pb-2 flex-wrap">
               {TABS.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={'px-3 py-1.5 rounded font-bold text-xs transition ' + (activeTab === tab.id ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400 hover:bg-stone-700')}>
+                  className={`px-3 py-1.5 rounded font-bold text-xs transition ${activeTab === tab.id ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>
                   {tab.label}
                 </button>
               ))}
@@ -955,9 +932,9 @@
                       : data.orders.map((ord, i) => (
                           <div key={i} className="bg-black/30 p-3 rounded border border-wuxia-gold/20 flex justify-between items-start gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-wuxia-gold font-bold text-sm truncate">{ord.productName} <span className="text-stone-400 text-xs">({ord.price{'}'})</span></p>
-                              <p className="text-xs text-stone-400 truncate">{'{'}ord.orderId{'}'} | {'{'}ord.userName{'}'}</p>
-                              <p className="text-xs text-stone-500">{'{'}ord.date{'}'} | 備註: <span className="text-white">{'{'}ord.paymentNote || '無'{'}'}</span></p>
+                              <p className="text-wuxia-gold font-bold text-sm truncate">{ord.productName} <span className="text-stone-400 text-xs">(${ord.price})</span></p>
+                              <p className="text-xs text-stone-400 truncate">{ord.orderId} | {ord.userName}</p>
+                              <p className="text-xs text-stone-500">{ord.date} | 備註: <span className="text-white">{ord.paymentNote || '無'}</span></p>
                             </div>
                             <button onClick={() => handleFulfill(ord.rowIndex, ord.orderId, ord.userName)} className="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shrink-0">強制發貨</button>
                           </div>
@@ -970,8 +947,8 @@
                 {activeTab === 'inventory' && (
                   <div>
                     <div className="flex gap-2 mb-3">
-                      <button onClick={() => setShowBatch(false)} className={'px-3 py-1.5 rounded text-xs font-bold ' + (!showBatch ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400')}>單筆新增</button>
-                      <button onClick={() => setShowBatch(true)}  className={'px-3 py-1.5 rounded text-xs font-bold ' + (showBatch  ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400')}>批次新增</button>
+                      <button onClick={() => setShowBatch(false)} className={`px-3 py-1.5 rounded text-xs font-bold ${!showBatch ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400'}`}>單筆新增</button>
+                      <button onClick={() => setShowBatch(true)}  className={`px-3 py-1.5 rounded text-xs font-bold ${showBatch  ? 'bg-wuxia-red text-white' : 'bg-stone-800 text-stone-400'}`}>批次新增</button>
                     </div>
                     {!showBatch && (
                       <div className="bg-stone-900 p-3 rounded mb-3 border border-stone-700">
@@ -993,10 +970,10 @@
                           {data.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                         <textarea value={batchText} onChange={e => setBatchText(e.target.value)} rows={5}
-                          placeholder="格式：每行一組，以逗號分隔（密碼可留空）&#10;例：&#10;CODE001,PASS001&#10;CODE002"
+                          placeholder={"格式：每行一組，逗號分隔（密碼可留空）\n例：\nCODE001,PASS001\nCODE002"}
                           className="w-full bg-black border border-stone-600 rounded p-2 text-white text-xs font-mono outline-none" />
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] text-stone-500">共 {'{'}batchText.split('\n').filter(l => l.trim()).length{'}'} 行</span>
+                          <span className="text-[10px] text-stone-500">共 {batchText.split('\n').filter(l => l.trim()).length} 行</span>
                           <button onClick={handleBatchAdd} className="px-4 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded font-bold text-xs">批次匯入</button>
                         </div>
                       </div>
@@ -1006,16 +983,16 @@
                         const isSold  = inv.status === 'Sold'      || inv.status === '已售出';
                         const isAvail = inv.status === 'Available' || inv.status === '可用';
                         return (
-                          <div key={i} className={'bg-black/20 p-2 rounded border ' + (isSold ? 'border-red-900/40' : 'border-stone-800')}>
+                          <div key={i} className={`bg-black/20 p-2 rounded border ${isSold ? 'border-red-900/40' : 'border-stone-800'}`}>
                             <div className="flex justify-between items-start">
                               <div className="overflow-hidden flex-1">
-                                <p className="text-stone-300 text-xs font-bold truncate">{'{'}inv.productName{'}'}</p>
-                                <p className="text-[10px] text-stone-500 font-mono">卡號: {'{'}inv.code{'}'}{'{'}inv.password ? ' / 密碼: ' + inv.password : ''{'}'}</p>
-                                {'{'}isSold && inv.soldOrderId && <p className="text-[10px] text-red-400 mt-0.5">📦 {'{'}inv.soldOrderId{'}'} | 👤 {'{'}inv.soldUserName{'}'}</p>{'}'}
+                                <p className="text-stone-300 text-xs font-bold truncate">{inv.productName}</p>
+                                <p className="text-[10px] text-stone-500 font-mono">卡號: {inv.code}{inv.password ? ' / 密碼: ' + inv.password : ''}</p>
+                                {isSold && inv.soldOrderId && <p className="text-[10px] text-red-400 mt-0.5">📦 {inv.soldOrderId} | 👤 {inv.soldUserName}</p>}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                <span className={'text-[10px] px-1.5 py-0.5 rounded font-bold ' + (isAvail ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300')}>{'{'}isAvail ? '可用' : '已售'{'}'}</span>
-                                {'{'}isAvail && <button onClick={() => handleDeleteStock(inv.rowIndex)} className="text-red-500 hover:text-red-300 text-xs border border-red-900 px-1.5 rounded">刪</button>{'}'}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isAvail ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'}`}>{isAvail ? '可用' : '已售'}</span>
+                                {isAvail && <button onClick={() => handleDeleteStock(inv.rowIndex)} className="text-red-500 hover:text-red-300 text-xs border border-red-900 px-1.5 rounded">刪</button>}
                               </div>
                             </div>
                           </div>
@@ -1032,23 +1009,23 @@
                       <div className="space-y-3 animate-fadeIn">
                         <div className="flex items-center gap-2 mb-2">
                           <button onClick={() => setEditProduct(null)} className="text-xs text-stone-400 hover:text-white">← 返回列表</button>
-                          <span className="text-wuxia-gold text-sm font-bold">{'{'}editProduct.rowIndex ? '編輯商品' : '新增商品'{'}'}</span>
+                          <span className="text-wuxia-gold text-sm font-bold">{editProduct.rowIndex ? '編輯商品' : '新增商品'}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <div><label className="block text-[10px] text-stone-500 mb-1">商品ID（英數，不可重複）</label><input type="text" value={prodForm.id} onChange={e => setProdForm({...prodForm, id: e.target.value})} disabled={!!editProduct.rowIndex} placeholder="pc-1" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none disabled:opacity-50" /></div>
-                          <div><label className="block text-[10px] text-stone-500 mb-1">價格（NT$）</label><input type="number" value={prodForm.price} onChange={e => setProdForm({...prodForm, price: e.target.value})} placeholder="150" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">商品ID</label><input type="text" value={prodForm.id} onChange={e => setProdForm({...prodForm, id:e.target.value})} disabled={!!editProduct.rowIndex} placeholder="pc-1" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none disabled:opacity-50" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">價格（NT$）</label><input type="number" value={prodForm.price} onChange={e => setProdForm({...prodForm, price:e.target.value})} placeholder="150" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
                         </div>
-                        <div><label className="block text-[10px] text-stone-500 mb-1">商品名稱</label><input type="text" value={prodForm.name} onChange={e => setProdForm({...prodForm, name: e.target.value})} placeholder="商品名稱" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
-                        <div><label className="block text-[10px] text-stone-500 mb-1">商品描述</label><textarea value={prodForm.desc} onChange={e => setProdForm({...prodForm, desc: e.target.value})} rows={2} placeholder="簡短描述..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
-                        <div><label className="block text-[10px] text-stone-500 mb-1">圖片連結 (URL)</label><input type="text" value={prodForm.imageUrl} onChange={e => setProdForm({...prodForm, imageUrl: e.target.value})} placeholder="https://..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                        <div><label className="block text-[10px] text-stone-500 mb-1">商品名稱</label><input type="text" value={prodForm.name} onChange={e => setProdForm({...prodForm, name:e.target.value})} placeholder="商品名稱" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                        <div><label className="block text-[10px] text-stone-500 mb-1">商品描述</label><textarea value={prodForm.desc} onChange={e => setProdForm({...prodForm, desc:e.target.value})} rows={2} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                        <div><label className="block text-[10px] text-stone-500 mb-1">圖片連結</label><input type="text" value={prodForm.imageUrl} onChange={e => setProdForm({...prodForm, imageUrl:e.target.value})} placeholder="https://..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
                         <div><label className="block text-[10px] text-stone-500 mb-1">分類</label>
-                          <select value={prodForm.category} onChange={e => setProdForm({...prodForm, category: e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none">
+                          <select value={prodForm.category} onChange={e => setProdForm({...prodForm, category:e.target.value})} className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none">
                             <option value="電腦遊戲">電腦遊戲</option>
                             <option value="手機遊戲">手機遊戲</option>
                             <option value="網頁遊戲">網頁遊戲</option>
                           </select>
                         </div>
-                        <button onClick={handleSaveProduct} className="w-full py-2.5 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold text-sm transition">{'{'}editProduct.rowIndex ? '儲存修改' : '新增商品'{'}'}</button>
+                        <button onClick={handleSaveProduct} className="w-full py-2.5 bg-wuxia-red hover:bg-wuxia-red-dark text-white rounded font-bold text-sm transition">{editProduct.rowIndex ? '儲存修改' : '新增商品'}</button>
                       </div>
                     ) : (
                       <>
@@ -1057,20 +1034,20 @@
                         </div>
                         <div className="space-y-2 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
                           {data.products.map((prod, i) => (
-                            <div key={i} className={'p-3 rounded border flex items-center gap-3 ' + (prod.status === '下架' ? 'border-stone-700 opacity-60' : 'border-wuxia-gold/20')}>
+                            <div key={i} className={`p-3 rounded border flex items-center gap-3 ${prod.status === '下架' ? 'border-stone-700 opacity-60' : 'border-wuxia-gold/20'}`}>
                               {prod.imageUrl && <img src={prod.imageUrl} className="w-12 h-12 object-cover rounded border border-stone-700 shrink-0" alt="" />}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-white text-sm font-bold truncate">{'{'}prod.name{'}'}</p>
-                                  <span className={'text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ' + (prod.status === '下架' ? 'bg-stone-700 text-stone-400' : 'bg-green-900/60 text-green-300')}>{'{'}prod.status || '上架'{'}'}</span>
+                                  <p className="text-white text-sm font-bold truncate">{prod.name}</p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${prod.status === '下架' ? 'bg-stone-700 text-stone-400' : 'bg-green-900/60 text-green-300'}`}>{prod.status || '上架'}</span>
                                 </div>
-                                <p className="text-xs text-stone-500">NT{prod.price{'}'} | {'{'}prod.category{'}'} | ID: {'{'}prod.id{'}'}</p>
+                                <p className="text-xs text-stone-500">NT${prod.price} | {prod.category} | ID: {prod.id}</p>
                               </div>
                               <div className="flex flex-col gap-1.5 shrink-0">
                                 <button onClick={() => openEditProduct(prod)} className="text-xs bg-stone-700 hover:bg-stone-600 text-white px-2 py-1 rounded">編輯</button>
-                                <button onClick={() => handleToggleStatus(prod)} className={'text-xs px-2 py-1 rounded ' + (prod.status === '下架' ? 'bg-green-900/50 text-green-300 hover:bg-green-800' : 'bg-red-900/50 text-red-300 hover:bg-red-800')}>{'{'}prod.status === '下架' ? '上架' : '下架'{'}'}</button>
+                                <button onClick={() => handleToggleStatus(prod)} className={`text-xs px-2 py-1 rounded ${prod.status === '下架' ? 'bg-green-900/50 text-green-300 hover:bg-green-800' : 'bg-red-900/50 text-red-300 hover:bg-red-800'}`}>{prod.status === '下架' ? '上架' : '下架'}</button>
                                 <button onClick={async () => {
-                                  const sv = await Swal.fire({ title:'設定限時搶購截止', html:'<input id="saleEnd" type="datetime-local" style="width:100%;background:#1a0f0f;border:1px solid #78350f;border-radius:6px;padding:8px;color:#fbbf24;outline:none" value="' + (prod.saleEnd||'') + '" />', showCancelButton:true, confirmButtonText:'設定', cancelButtonText:'取消特賣', background:'#2b1212', color:'#fce7f3', preConfirm: () => document.getElementById('saleEnd').value });
+                                  const sv = await Swal.fire({ title:'設定限時搶購截止', html:'<input id="saleEnd" type="datetime-local" style="width:100%;background:#1a0f0f;border:1px solid #78350f;border-radius:6px;padding:8px;color:#fbbf24;outline:none" />', showCancelButton:true, confirmButtonText:'設定', cancelButtonText:'取消特賣', background:'#2b1212', color:'#fce7f3', preConfirm: () => document.getElementById('saleEnd').value });
                                   if (sv.isDismissed) return;
                                   callAdminApi('setSaleEnd', { rowIndex: prod.rowIndex, saleEnd: sv.value || '' }).then(() => { Swal.fire({toast:true,position:'top-end',icon:'success',title: sv.value ? '限時搶購已設定' : '已取消特賣',timer:1500,showConfirmButton:false}); refresh(); });
                                 }} className="text-xs px-2 py-1 rounded bg-orange-900/50 text-orange-300 hover:bg-orange-800">⏰ 特賣</button>
@@ -1101,9 +1078,9 @@
                         : (data.blacklist || []).map((bl, i) => (
                             <div key={i} className="flex justify-between items-center bg-red-900/10 border border-red-900/30 p-3 rounded">
                               <div className="flex-1 min-w-0">
-                                <p className="text-white text-xs font-bold">{'{'}bl.userName || '未知用戶'{'}'}</p>
-                                <p className="text-[10px] text-stone-500 font-mono truncate">{'{'}bl.userId{'}'}</p>
-                                <p className="text-[10px] text-red-400">{'{'}bl.reason || '無原因'{'}'} | {'{'}bl.date{'}'}</p>
+                                <p className="text-white text-xs font-bold">{bl.userName || '未知用戶'}</p>
+                                <p className="text-[10px] text-stone-500 font-mono truncate">{bl.userId}</p>
+                                <p className="text-[10px] text-red-400">{bl.reason || '無原因'} | {bl.date}</p>
                               </div>
                               <button onClick={() => handleRemoveBlacklist(bl.rowIndex, bl.userName || bl.userId)} className="text-xs text-green-400 hover:text-green-200 border border-green-900 px-2 py-1 rounded ml-2 shrink-0">解除</button>
                             </div>
@@ -1120,39 +1097,39 @@
                       <div className="space-y-3 animate-fadeIn">
                         <div className="flex items-center gap-2 mb-2">
                           <button onClick={() => setEditBank(false)} className="text-xs text-stone-400 hover:text-white">← 返回列表</button>
-                          <span className="text-wuxia-gold text-sm font-bold">{'{'}bankForm.rowIndex ? '編輯帳戶' : '新增收款帳戶'{'}'}</span>
+                          <span className="text-wuxia-gold text-sm font-bold">{bankForm.rowIndex ? '編輯帳戶' : '新增收款帳戶'}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <div><label className="block text-[10px] text-stone-500 mb-1">帳戶別名</label><input type="text" value={bankForm.alias}    onChange={e => setBankForm({...bankForm,alias:e.target.value})}    placeholder="將來銀行主帳戶" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
-                          <div><label className="block text-[10px] text-stone-500 mb-1">銀行代碼</label><input type="text" value={bankForm.code}     onChange={e => setBankForm({...bankForm,code:e.target.value})}     placeholder="823"  className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
-                          <div><label className="block text-[10px] text-stone-500 mb-1">銀行名稱</label><input type="text" value={bankForm.bankName} onChange={e => setBankForm({...bankForm,bankName:e.target.value})} placeholder="將來銀行" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
-                          <div><label className="block text-[10px] text-stone-500 mb-1">帳號</label>    <input type="text" value={bankForm.account}  onChange={e => setBankForm({...bankForm,account:e.target.value})}  placeholder="88618888888836" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">帳戶別名</label><input type="text" value={bankForm.alias}    onChange={e => setBankForm({...bankForm, alias:e.target.value})}    placeholder="將來銀行主帳戶" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">銀行代碼</label><input type="text" value={bankForm.code}     onChange={e => setBankForm({...bankForm, code:e.target.value})}     placeholder="823"           className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">銀行名稱</label><input type="text" value={bankForm.bankName} onChange={e => setBankForm({...bankForm, bankName:e.target.value})} placeholder="將來銀行"       className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                          <div><label className="block text-[10px] text-stone-500 mb-1">帳號</label>    <input type="text" value={bankForm.account}  onChange={e => setBankForm({...bankForm, account:e.target.value})}  placeholder="88618888888836" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
                         </div>
-                        <div><label className="block text-[10px] text-stone-500 mb-1">入帳通知轉寄信箱</label><input type="email" value={bankForm.email} onChange={e => setBankForm({...bankForm,email:e.target.value})} placeholder="your@email.com" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
+                        <div><label className="block text-[10px] text-stone-500 mb-1">入帳通知轉寄信箱</label><input type="email" value={bankForm.email} onChange={e => setBankForm({...bankForm, email:e.target.value})} placeholder="your@email.com" className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-xs outline-none" /></div>
                         <div className="flex items-center gap-2">
-                          <input type="checkbox" id="bankEnabled" checked={bankForm.enabled} onChange={e => setBankForm({...bankForm,enabled:e.target.checked})} className="accent-wuxia-jade w-4 h-4" />
+                          <input type="checkbox" id="bankEnabled" checked={bankForm.enabled} onChange={e => setBankForm({...bankForm, enabled:e.target.checked})} className="accent-wuxia-jade w-4 h-4" />
                           <label htmlFor="bankEnabled" className="text-xs text-stone-300">啟用此帳戶（納入自動對帳）</label>
                         </div>
-                        <button onClick={handleSaveBank} className="w-full py-2.5 bg-wuxia-jade/20 hover:bg-wuxia-jade/30 text-wuxia-jade border border-wuxia-jade/50 rounded font-bold text-sm transition">{'{'}bankForm.rowIndex ? '儲存修改' : '新增帳戶'{'}'}</button>
+                        <button onClick={handleSaveBank} className="w-full py-2.5 bg-wuxia-jade/20 hover:bg-wuxia-jade/30 text-wuxia-jade border border-wuxia-jade/50 rounded font-bold text-sm transition">{bankForm.rowIndex ? '儲存修改' : '新增帳戶'}</button>
                       </div>
                     ) : (
                       <>
                         <div className="flex justify-end mb-3">
-                          <button onClick={() => { setBankForm({alias:'',code:'',bankName:'',account:'',email:'',enabled:true,rowIndex:null}); setEditBank(true); }} className="px-4 py-1.5 bg-wuxia-jade/20 hover:bg-wuxia-jade/30 text-wuxia-jade border border-wuxia-jade/50 rounded text-xs font-bold transition">＋ 新增帳戶</button>
+                          <button onClick={() => { setBankForm({ alias:'', code:'', bankName:'', account:'', email:'', enabled:true, rowIndex:null }); setEditBank(true); }} className="px-4 py-1.5 bg-wuxia-jade/20 hover:bg-wuxia-jade/30 text-wuxia-jade border border-wuxia-jade/50 rounded text-xs font-bold transition">＋ 新增帳戶</button>
                         </div>
                         <div className="bg-blue-900/20 border border-blue-700/40 rounded p-3 mb-3 text-xs text-blue-300">💡 設定後請至 GAS 選單執行「啟用自動對帳」，系統將同時掃描所有啟用帳戶的入帳通知。</div>
                         <div className="space-y-2 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
                           {(data.banks || []).length === 0
                             ? <p className="text-center text-stone-500 py-6">尚未設定收款帳戶</p>
                             : (data.banks || []).map((b, i) => (
-                                <div key={i} className={'p-3 rounded border flex items-center gap-3 ' + (b.enabled ? 'border-wuxia-jade/30' : 'border-stone-700 opacity-60')}>
+                                <div key={i} className={`p-3 rounded border flex items-center gap-3 ${b.enabled ? 'border-wuxia-jade/30' : 'border-stone-700 opacity-60'}`}>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <p className="text-white text-sm font-bold">{'{'}b.alias{'}'}</p>
-                                      <span className={'text-[10px] px-1.5 py-0.5 rounded font-bold ' + (b.enabled ? 'bg-green-900/60 text-green-300' : 'bg-stone-700 text-stone-400')}>{'{'}b.enabled ? '啟用' : '停用'{'}'}</span>
+                                      <p className="text-white text-sm font-bold">{b.alias}</p>
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${b.enabled ? 'bg-green-900/60 text-green-300' : 'bg-stone-700 text-stone-400'}`}>{b.enabled ? '啟用' : '停用'}</span>
                                     </div>
-                                    <p className="text-xs text-stone-500">{'{'}b.bankName{'}'}（{'{'}b.code{'}'}）{'{'}b.account{'}'}</p>
-                                    {'{'}b.email && <p className="text-[10px] text-stone-600">通知信箱：{'{'}b.email{'}'}</p>{'}'}
+                                    <p className="text-xs text-stone-500">{b.bankName}（{b.code}）{b.account}</p>
+                                    {b.email && <p className="text-[10px] text-stone-600">通知信箱：{b.email}</p>}
                                   </div>
                                   <div className="flex flex-col gap-1.5 shrink-0">
                                     <button onClick={() => { setBankForm({...b}); setEditBank(true); }} className="text-xs bg-stone-700 hover:bg-stone-600 text-white px-2 py-1 rounded">編輯</button>
@@ -1175,19 +1152,20 @@
                         <button onClick={() => setSelectedIssue(null)} className="text-xs text-stone-400 hover:text-white">← 返回列表</button>
                         <div className="bg-black/40 p-4 rounded border border-stone-700">
                           <div className="flex justify-between mb-2">
-                            <span className="text-wuxia-gold font-bold text-sm">{'{'}selectedIssue.type{'}'}</span>
-                            <span className="text-xs text-stone-500">{'{'}selectedIssue.date{'}'}</span>
+                            <span className="text-wuxia-gold font-bold text-sm">{selectedIssue.type}</span>
+                            <span className="text-xs text-stone-500">{selectedIssue.date}</span>
                           </div>
-                          <p className="text-xs text-stone-400 mb-1">用戶：{'{'}selectedIssue.userName{'}'} | 商品：{'{'}selectedIssue.productName{'}'}</p>
-                          <p className="text-sm text-stone-200 bg-black/30 p-3 rounded mt-2">{'{'}selectedIssue.description{'}'}</p>
-                          {'{'}selectedIssue.reply && (
+                          <p className="text-xs text-stone-400 mb-1">用戶：{selectedIssue.userName} | 商品：{selectedIssue.productName}</p>
+                          <p className="text-sm text-stone-200 bg-black/30 p-3 rounded mt-2">{selectedIssue.description}</p>
+                          {selectedIssue.reply && (
                             <div className="mt-3 p-3 bg-wuxia-gold/10 border border-wuxia-gold/30 rounded">
                               <p className="text-[10px] text-wuxia-gold mb-1">管理員回覆：</p>
-                              <p className="text-sm text-white">{'{'}selectedIssue.reply{'}'}</p>
+                              <p className="text-sm text-white">{selectedIssue.reply}</p>
                             </div>
-                          ){'}'}
+                          )}
                         </div>
-                        <div><label className="block text-xs text-wuxia-gold mb-1">回覆內容</label>
+                        <div>
+                          <label className="block text-xs text-wuxia-gold mb-1">回覆內容</label>
                           <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder="輸入給用戶的回覆..." className="w-full bg-black/40 border border-stone-600 rounded p-2 text-white text-sm outline-none" />
                         </div>
                         <button onClick={handleReplyIssue} className="w-full py-2 bg-wuxia-gold text-black font-bold rounded hover:brightness-110 transition">送出回覆</button>
@@ -1201,15 +1179,15 @@
                                 onClick={() => { setSelectedIssue(issue); setReplyText(issue.reply || ''); }}>
                                 <div className="flex-1 overflow-hidden">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-wuxia-gold text-xs font-bold">{'{'}issue.type{'}'}</span>
-                                    {'{'}issue.reply
+                                    <span className="text-wuxia-gold text-xs font-bold">{issue.type}</span>
+                                    {issue.reply
                                       ? <span className="text-[10px] bg-green-900/50 text-green-400 border border-green-700 px-1 rounded">已回覆</span>
                                       : <span className="text-[10px] bg-yellow-900/50 text-yellow-500 border border-yellow-700 px-1 rounded">待回覆</span>
-                                    {'}'}
+                                    }
                                   </div>
-                                  <p className="text-xs text-stone-400 truncate mt-0.5">{'{'}issue.userName{'}'}: {'{'}issue.description{'}'}</p>
+                                  <p className="text-xs text-stone-400 truncate mt-0.5">{issue.userName}: {issue.description}</p>
                                 </div>
-                                <span className="text-[10px] text-stone-600 shrink-0 ml-2">{'{'}issue.date{'}'}</span>
+                                <span className="text-[10px] text-stone-600 shrink-0 ml-2">{issue.date}</span>
                               </div>
                             ))
                         }
@@ -1223,8 +1201,8 @@
                   <div className="space-y-2">
                     {data.users.map((u, i) => (
                       <div key={i} className="flex justify-between items-center p-2 border-b border-stone-800">
-                        <div><p className="text-sm text-stone-200">{'{'}u.name{'}'}</p><p className="text-[10px] text-stone-500">{'{'}u.uid{'}'}</p></div>
-                        <span className="text-xs text-stone-600">{'{'}u.date{'}'}</span>
+                        <div><p className="text-sm text-stone-200">{u.name}</p><p className="text-[10px] text-stone-500">{u.uid}</p></div>
+                        <span className="text-xs text-stone-600">{u.date}</span>
                       </div>
                     ))}
                   </div>
