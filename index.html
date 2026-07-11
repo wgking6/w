@@ -235,7 +235,7 @@
       // GAS 環境下透過 google.script.run 取得；非 GAS 環境讀取 window.__APP_CONFIG__
       let APP_CONFIG = null;
 
-      const getAppConfig = () => new Promise((resolve, reject) => {
+        const getAppConfig = () => new Promise((resolve, reject) => {
         if (APP_CONFIG) return resolve(APP_CONFIG);
         if (typeof google !== 'undefined' && google.script) {
           google.script.run
@@ -247,7 +247,13 @@
           APP_CONFIG = window.__APP_CONFIG__;
           resolve(APP_CONFIG);
         } else {
-          reject(new Error('無法取得應用程式設定'));
+          // ★ 如果是部署在 Pages 這種純前端環境，請在這裡 fallback 寫死你的環境變數
+          APP_CONFIG = {
+            LIFF_ID: '在此填入你的LIFF_ID',
+            GAS_API_URL: '在此填入你的_GAS_Web_App_網址',
+            ADMIN_ID: 'Ua66fd77f72e4524075afd856cae91587'
+          };
+          resolve(APP_CONFIG);
         }
       });
 
