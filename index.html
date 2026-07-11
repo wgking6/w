@@ -134,19 +134,7 @@
       /* 搜尋高亮 */
       .search-highlight { background: rgba(251,191,36,0.25); border-radius: 2px; }
     </style>
-    <!-- GAS HtmlTemplate 注入設定（純瀏覽器環境此區塊會被略過） -->
-    <script>
-  (function() {
-    try {
-      var _raw = '<?!= appConfig ?>';
-      if (_raw && _raw.indexOf('<?!=') === -1) {
-        window.__APP_CONFIG__ = JSON.parse(_raw);
-      }
-    } catch(e) {
-      window.__APP_CONFIG__ = null;
-    }
-  })();
-    </script>
+   
   </head>
   <body>
     <div id="root"></div>
@@ -231,29 +219,35 @@
         return nav.startsWith('zh') ? 'zh-TW' : 'en';
       };
 
-      // 執行期設定（由後端注入或執行時取得）
-      // GAS 環境下透過 google.script.run 取得；非 GAS 環境讀取 window.__APP_CONFIG__
-      let APP_CONFIG = null;
+      // ==========================================
+      // 執行期設定（Runtime Config）
+      // ==========================================
+      // ★ 唯一需要手動填入的值：GAS 部署後的 /exec 網址
+      // 這是「問 GAS 要設定」必須先知道的入口網址，無法避免寫死
+      // 到 GAS 編輯器「部署」→「管理部署作業」複製你的 Web App 網址填入下方
+      const GAS_BOOTSTRAP_URL = 'https://script.google.com/macros/s/AKfycbxo-_jcz9ApUTS6ENUAKYmg5ggT3h8AGAoulKlMZu4uSh-hx5yCC2qOr6XLLhedjKBsew/exec';
 
-        const getAppConfig = () => new Promise((resolve, reject) => {
+      // GAS 環境下透過 google.script.run 取得；
+      // 純前端環境（Vercel/GitHub Pages）改用 fetch 向 GAS 要設定，
+      // 不再把 LIFF_ID / ADMIN_ID 寫死在前端原始碼裡
+      let APP_CONFIG = null;
+      const getAppConfig = () => new Promise((resolve, reject) => {
         if (APP_CONFIG) return resolve(APP_CONFIG);
         if (typeof google !== 'undefined' && google.script) {
           google.script.run
             .withSuccessHandler(cfg => { APP_CONFIG = cfg; resolve(cfg); })
             .withFailureHandler(e => reject(new Error(e.message || e)))
             .getClientConfig();
-        } else if (window.__APP_CONFIG__) {
-          // 非 GAS 環境：由 doGet 的 HtmlTemplate 注入
-          APP_CONFIG = window.__APP_CONFIG__;
-          resolve(APP_CONFIG);
         } else {
-          // ★ 如果是部署在 Pages 這種純前端環境，請在這裡 fallback 寫死你的環境變數
-          APP_CONFIG = {
-            LIFF_ID: '在此填入你的LIFF_ID',
-            GAS_API_URL: '在此填入你的_GAS_Web_App_網址',
-            ADMIN_ID: 'Ua66fd77f72e4524075afd856cae91587'
-          };
-          resolve(APP_CONFIG);
+          // 純前端環境：向 GAS 的 getConfig API 索取設定
+          fetch(`${GAS_BOOTSTRAP_URL}?action=getConfig`)
+            .then(r => r.json())
+            .then(cfg => {
+              if (cfg.error) throw new Error(cfg.error);
+              APP_CONFIG = cfg;
+              resolve(APP_CONFIG);
+            })
+            .catch(err => reject(new Error('取得設定失敗：' + err.message)));
         }
       });
 
