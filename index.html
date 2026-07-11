@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>遊戲方程式 Game Equation</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- LINE LIFF SDK -->
@@ -20,6 +20,8 @@
     <script src="https://unpkg.com/regenerator-runtime@0.14.1/runtime.js"></script>
     <!-- Babel for JSX transformation (standalone, CDN UMD 架構，不需要 build) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -150,7 +152,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="text/babel" data-presets="react">
+    <script type="text/babel" data-type="module" data-presets="react">
       // ==========================================
       // 設定與全域變數
       // ==========================================
