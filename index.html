@@ -140,7 +140,7 @@
         try {
           // GAS doGet 會將 appConfig 替換為 JSON 字串
           // 純瀏覽器環境下此行會語法錯誤，由 catch 處理
-          var _raw = '<?= appConfig ?>';
+          var _raw = '<?!= appConfig ?>';
           if (_raw && _raw.indexOf('<?=') === -1) {
             window.__APP_CONFIG__ = JSON.parse(_raw);
           }
