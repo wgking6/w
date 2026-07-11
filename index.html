@@ -136,18 +136,16 @@
     </style>
     <!-- GAS HtmlTemplate 注入設定（純瀏覽器環境此區塊會被略過） -->
     <script>
-      (function() {
-        try {
-          // GAS doGet 會將 appConfig 替換為 JSON 字串
-          // 純瀏覽器環境下此行會語法錯誤，由 catch 處理
-          var _raw = '<?!= appConfig ?>';
-          if (_raw && _raw.indexOf('<?=') === -1) {
-            window.__APP_CONFIG__ = JSON.parse(_raw);
-          }
-        } catch(e) {
-          window.__APP_CONFIG__ = null;
-        }
-      })();
+  (function() {
+    try {
+      var _raw = '<?!= appConfig ?>';
+      if (_raw && _raw.indexOf('<?!=') === -1) {
+        window.__APP_CONFIG__ = JSON.parse(_raw);
+      }
+    } catch(e) {
+      window.__APP_CONFIG__ = null;
+    }
+  })();
     </script>
   </head>
   <body>
