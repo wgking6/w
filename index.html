@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>遊戲方程式 Game Equation</title>
-
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- LINE LIFF SDK -->
@@ -20,8 +20,6 @@
     <script src="https://unpkg.com/regenerator-runtime@0.14.1/runtime.js"></script>
     <!-- Babel for JSX transformation (standalone, CDN UMD 架構，不需要 build) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -134,11 +132,25 @@
       /* 搜尋高亮 */
       .search-highlight { background: rgba(251,191,36,0.25); border-radius: 2px; }
     </style>
-   
+    <!-- GAS HtmlTemplate 注入設定（純瀏覽器環境此區塊會被略過） -->
+    <script>
+      (function() {
+        try {
+          // GAS doGet 會將 appConfig 替換為 JSON 字串
+          // 純瀏覽器環境下此行會語法錯誤，由 catch 處理
+          var _raw = '<?= appConfig ?>';
+          if (_raw && _raw.indexOf('<?=') === -1) {
+            window.__APP_CONFIG__ = JSON.parse(_raw);
+          }
+        } catch(e) {
+          window.__APP_CONFIG__ = null;
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="text/babel" data-type="module" data-presets="react">
+    <script type="text/babel" data-presets="react">
       // ==========================================
       // 設定與全域變數
       // ==========================================
@@ -219,18 +231,10 @@
         return nav.startsWith('zh') ? 'zh-TW' : 'en';
       };
 
-      // ==========================================
-      // 執行期設定（Runtime Config）
-      // ==========================================
-      // ★ 唯一需要手動填入的值：GAS 部署後的 /exec 網址
-      // 這是「問 GAS 要設定」必須先知道的入口網址，無法避免寫死
-      // 到 GAS 編輯器「部署」→「管理部署作業」複製你的 Web App 網址填入下方
-      const GAS_BOOTSTRAP_URL = 'https://script.google.com/macros/s/AKfycbxo-_jcz9ApUTS6ENUAKYmg5ggT3h8AGAoulKlMZu4uSh-hx5yCC2qOr6XLLhedjKBsew/exec';
-
-      // GAS 環境下透過 google.script.run 取得；
-      // 純前端環境（Vercel/GitHub Pages）改用 fetch 向 GAS 要設定，
-      // 不再把 LIFF_ID / ADMIN_ID 寫死在前端原始碼裡
+      // 執行期設定（由後端注入或執行時取得）
+      // GAS 環境下透過 google.script.run 取得；非 GAS 環境讀取 window.__APP_CONFIG__
       let APP_CONFIG = null;
+
       const getAppConfig = () => new Promise((resolve, reject) => {
         if (APP_CONFIG) return resolve(APP_CONFIG);
         if (typeof google !== 'undefined' && google.script) {
@@ -238,16 +242,12 @@
             .withSuccessHandler(cfg => { APP_CONFIG = cfg; resolve(cfg); })
             .withFailureHandler(e => reject(new Error(e.message || e)))
             .getClientConfig();
+        } else if (window.__APP_CONFIG__) {
+          // 非 GAS 環境：由 doGet 的 HtmlTemplate 注入
+          APP_CONFIG = window.__APP_CONFIG__;
+          resolve(APP_CONFIG);
         } else {
-          // 純前端環境：向 GAS 的 getConfig API 索取設定
-          fetch(`${GAS_BOOTSTRAP_URL}?action=getConfig`)
-            .then(r => r.json())
-            .then(cfg => {
-              if (cfg.error) throw new Error(cfg.error);
-              APP_CONFIG = cfg;
-              resolve(APP_CONFIG);
-            })
-            .catch(err => reject(new Error('取得設定失敗：' + err.message)));
+          reject(new Error('無法取得應用程式設定'));
         }
       });
 
@@ -370,9 +370,9 @@
       // === Admin API ===
       const callAdminApi = (subAction, payload) => new Promise((resolve, reject) => {
         if (isGAS) {
-          google.script.run.withSuccessHandler(resolve).withFailureHandler(e => reject(new Error(e.message || e))).handleAdminAction({ adminId: APP_CONFIG?.ADMIN_ID || "", subAction, payload });
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(e => reject(new Error(e.message || e))).handleAdminAction({ adminId: (APP_CONFIG && APP_CONFIG.ADMIN_ID) || "", subAction, payload });
         } else {
-          fetch(getGasUrl(), { method:'POST', redirect:'follow', headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({action:'adminAction', adminId: APP_CONFIG?.ADMIN_ID || "", subAction, payload}) })
+          fetch(getGasUrl(), { method:'POST', redirect:'follow', headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({action:'adminAction', adminId: (APP_CONFIG && APP_CONFIG.ADMIN_ID) || "", subAction, payload}) })
             .then(r=>r.json()).then(d => { if(d.success) resolve(d); else reject(new Error(d.message || 'Admin Action Failed')); }).catch(reject);
         }
       });
@@ -582,9 +582,9 @@
         return (
           <Modal isOpen={isOpen} title="會員資料卡" onClose={onClose}>
             <div className="flex flex-col items-center mb-6">
-              <img src={user?.pictureUrl || 'https://placehold.co/100'} className="w-20 h-20 rounded-full border-2 border-wuxia-gold shadow-lg mb-2" />
-              <h3 className="text-lg font-bold text-white">{user?.displayName}</h3>
-              <p className="text-xs text-stone-500">{user?.userId}</p>
+              <img src={(user && user.pictureUrl) || 'https://placehold.co/100'} className="w-20 h-20 rounded-full border-2 border-wuxia-gold shadow-lg mb-2" />
+              <h3 className="text-lg font-bold text-white">{user && user.displayName}</h3>
+              <p className="text-xs text-stone-500">{user && user.userId}</p>
             </div>
             {loading ? <div className="text-center py-4 text-wuxia-gold animate-pulse">讀取中...</div> : (
               <div className="space-y-4">
@@ -1251,7 +1251,7 @@
                 </div>
                 <div className="flex gap-2">
                   {isAdmin && <button onClick={onOpenAdmin} className="text-xs bg-red-900/80 hover:bg-red-700 text-red-200 border border-red-500 px-2 py-1 rounded animate-pulse font-bold">進入掌門密室</button>}
-                  <span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">ID: {user.userId?.substring(0,6)}...</span>
+                  <span className="text-[10px] text-stone-500 bg-black/50 px-2 py-1 rounded border border-stone-800">ID: {user.userId ? user.userId.substring(0,6) : ''}...</span>
                 </div>
               </div>
             )}
@@ -1533,7 +1533,7 @@
         }, [cart]);
 
         const loginWithLiffUrl = () => {
-          const liffId = APP_CONFIG?.LIFF_ID || '';
+          const liffId = (APP_CONFIG && APP_CONFIG.LIFF_ID) || '';
           window.top.location.href = LIFF_URL_BASE + liffId;
         };
 
@@ -1576,11 +1576,35 @@
               setShowBankInfo(true);
               Swal.fire({ toast:true, position:'top-end', icon:'info', title:'您有一筆待付款訂單', text:'請儘速完成轉帳', showConfirmButton:false, timer:3000, background:'#2b1212', color:'#fff' });
             }
-            const completedOrders = orders.filter(o => o.status === '已發貨').map(o => o.orderId);
+            const completedOrders = orders.filter(o => o.status === '已發貨');
             const lastKnownCount = parseInt(localStorage.getItem('game_equation_seen_count') || '0', 10);
-            if (completedOrders.length > lastKnownCount) {
-              setUnreadCount(completedOrders.length - lastKnownCount);
-              Swal.fire({ toast:true, position:'top-end', icon:'success', title:'寶物已送達！', text:'請至票券夾查收', showConfirmButton:false, timer:4000, background:'#2b1212', color:'#fff' });
+            const newDelivered = completedOrders.slice(0, completedOrders.length - lastKnownCount);
+
+            if (newDelivered.length > 0) {
+              setUnreadCount(newDelivered.length);
+              Swal.fire({ toast:true, position:'top-end', icon:'success', title:'🎉 寶物已送達！', text:'您的商品已發貨，請至票券夾查收卡號', showConfirmButton:false, timer:5000, background:'#2b1212', color:'#fff' });
+
+              // ★ LIFF 推播：在 LINE 內發送卡密訊息給自己（備用推播機制）
+              if (window.liff && window.liff.isInClient() && window.liff.isLoggedIn()) {
+                for (const order of newDelivered) {
+                  if (!order.codes) continue;
+                  const msg = '🎉 您的商品已發貨！\n'
+                    + '━━━━━━━━━━━━━━━\n'
+                    + '📦 訂單：' + order.orderId + '\n'
+                    + '🎮 商品：' + order.productName + '\n'
+                    + '💰 金額：NT$' + order.price + '\n\n'
+                    + '🎫 您的卡號、卡密如下：\n\n'
+                    + order.codes + '\n\n'
+                    + '━━━━━━━━━━━━━━━\n'
+                    + '⚠️ 請妥善保管卡密\n'
+                    + '💡 可至票券夾隨時查看';
+                  try {
+                    await window.liff.sendMessages([{ type: 'text', text: msg }]);
+                  } catch(e) {
+                    console.warn('LIFF sendMessages 失敗（可能已在票券夾檢視）:', e.message);
+                  }
+                }
+              }
             }
           } catch(e) { console.error(e); }
         }, [user]);
