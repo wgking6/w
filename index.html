@@ -12,14 +12,17 @@
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
-    <!-- React & ReactDOM (UMD only - removed conflicting importmap) -->
+    <!-- React & ReactDOM (UMD only) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- regenerator-runtime：解決 Babel 轉譯 async/await 時產生 import 語句的問題 -->
-    <script src="https://unpkg.com/regenerator-runtime@0.14.1/runtime.js"></script>
-    <!-- Babel for JSX transformation (standalone, CDN UMD 架構，不需要 build) -->
+    <!-- Babel standalone：只轉 JSX，不轉 async/await，現代瀏覽器原生支援 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      // 只轉 JSX，不讓 Babel 碰 async/await，避免輸出帶 import 的 regenerator code
+      Babel.registerPreset('jsx-only', {
+        presets: [ [Babel.availablePresets['react']] ]
+      });
+    </script>
     <script>
       tailwind.config = {
         theme: {
