@@ -149,7 +149,7 @@
       // 非機密常數
       const LIFF_URL_BASE = 'https://liff.line.me/';
       const LOGO_URL = 'https://placehold.co/200x200/991b1b/fbbf24?text=Game';
-      const BANK_INFO = { code: '823', name: '將來銀行', account: '88618888888836' };
+      const BANK_INFO = { code: '822', name: '中國信託', account: '864540221080' };
       const SHARE_INFO = {
         lineUrl: 'https://lin.ee/7F09Iui',
         message: '別錯過遊戲方程式的最新消息！快加入LINE好友獲得限定的優惠資訊。\n透過以下連結將官方帳號加入好友吧。\nhttps://lin.ee/7F09Iui'
@@ -368,13 +368,17 @@
       });
 
       // === Admin API ===
-      const callAdminApi = (subAction, payload) => new Promise((resolve, reject) => {
-        if (isGAS) {
-          google.script.run.withSuccessHandler(resolve).withFailureHandler(e => reject(new Error(e.message || e))).handleAdminAction({ adminId: APP_CONFIG?.ADMIN_ID || "", subAction, payload });
-        } else {
-          fetch(getGasUrl(), { method:'POST', redirect:'follow', headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({action:'adminAction', adminId: APP_CONFIG?.ADMIN_ID || "", subAction, payload}) })
-            .then(r=>r.json()).then(d => { if(d.success) resolve(d); else reject(new Error(d.message || 'Admin Action Failed')); }).catch(reject);
-        }
+      const callAdminApi = (subAction, payload) => new Promise(async (resolve, reject) => {
+        try {
+          const idToken = (typeof liff !== 'undefined' && liff.isLoggedIn && liff.isLoggedIn() && liff.getIDToken) ? liff.getIDToken() : '';
+          const req = { adminId: APP_CONFIG?.ADMIN_ID || '', idToken, subAction, payload };
+          if (isGAS) {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(e => reject(new Error(e.message || e))).handleAdminAction(req);
+          } else {
+            fetch(getGasUrl(), { method:'POST', redirect:'follow', headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({action:'adminAction', ...req}) })
+              .then(r=>r.json()).then(d=>{ if(d.success) resolve(d); else reject(new Error(d.message || 'Admin Action Failed')); }).catch(reject);
+          }
+        } catch(e) { reject(e); }
       });
 
       // ==========================================
