@@ -19,7 +19,6 @@
     <!-- regenerator-runtime：解決 Babel 轉譯 async/await 時產生 import 語句的問題 -->
     <script src="https://unpkg.com/regenerator-runtime@0.14.1/runtime.js"></script>
     <!-- Babel for JSX transformation (standalone, CDN UMD 架構，不需要 build) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
     <script>
@@ -231,23 +230,48 @@
       // 純前端環境（Vercel/GitHub Pages）改用 fetch 向 GAS 要設定，
       // 不再把 LIFF_ID / ADMIN_ID 寫死在前端原始碼裡
       let APP_CONFIG = null;
+      const FALLBACK_APP_CONFIG = {
+        LIFF_ID: '2008912922-0bJiM0sT',
+        GAS_API_URL: GAS_BOOTSTRAP_URL,
+        ADMIN_ID: 'Ua66fd77f72e4524075afd856cae91587',
+        ADMIN_EMAIL: 'wgking6@gmail.com',
+        BANK_INFO
+      };
       const getAppConfig = () => new Promise((resolve, reject) => {
         if (APP_CONFIG) return resolve(APP_CONFIG);
         if (typeof google !== 'undefined' && google.script) {
           google.script.run
-            .withSuccessHandler(cfg => { APP_CONFIG = cfg; resolve(cfg); })
+            .withSuccessHandler(cfg => {
+              if (!cfg || !cfg.GAS_API_URL || !cfg.LIFF_ID) {
+                reject(new Error('後端設定內容不完整'));
+                return;
+              }
+              APP_CONFIG = cfg;
+              resolve(cfg);
+            })
             .withFailureHandler(e => reject(new Error(e.message || e)))
             .getClientConfig();
         } else {
-          // 純前端環境：向 GAS 的 getConfig API 索取設定
-          fetch(`${GAS_BOOTSTRAP_URL}?action=getConfig`)
-            .then(r => r.json())
-            .then(cfg => {
-              if (cfg.error) throw new Error(cfg.error);
-              APP_CONFIG = cfg;
-              resolve(APP_CONFIG);
+          // GAS 重新導向偶爾會被瀏覽器 CORS 阻擋。動態設定失敗時使用備援值，
+          // 避免整個頁面卡在「設定載入失敗」。
+          const configUrl = `${GAS_BOOTSTRAP_URL}?action=getConfig&_=${Date.now()}`;
+          fetch(configUrl, { method: 'GET', redirect: 'follow', cache: 'no-store' })
+            .then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
             })
-            .catch(err => reject(new Error('取得設定失敗：' + err.message)));
+            .then(cfg => {
+              if (!cfg || cfg.error || !cfg.GAS_API_URL || !cfg.LIFF_ID) {
+                throw new Error((cfg && cfg.error) || '後端設定內容不完整');
+              }
+              APP_CONFIG = cfg;
+              resolve(cfg);
+            })
+            .catch(err => {
+              console.warn('動態設定讀取失敗，改用前端備援設定：', err);
+              APP_CONFIG = { ...FALLBACK_APP_CONFIG };
+              resolve(APP_CONFIG);
+            });
         }
       });
 
